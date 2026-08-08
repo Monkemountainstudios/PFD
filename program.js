@@ -571,9 +571,15 @@ swing.addEventListener('input',()=>{ swingValue.value=`${swing.value}%`; });
 
 
 function setMiniKnobVisual(knob, slider, minDeg = 135, sweep = 270) {
-  const indicator = knob.querySelector('span');
-  const t = Number(slider.value) / 100;
-  indicator.style.transform = `rotate(${minDeg + t * sweep}deg)`;
+    const indicator = knob.querySelector('span');
+
+    const min = Number(slider.min) || 0;
+    const max = Number(slider.max) || 100;
+    const value = Number(slider.value);
+
+    const t = (value - min) / (max - min);
+
+    indicator.style.transform = `rotate(${minDeg + t * sweep}deg)`;
 }
 
 function updateLfoUi() {
