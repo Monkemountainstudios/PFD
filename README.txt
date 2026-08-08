@@ -1,16 +1,16 @@
-PFD — Probabilistic Fractal Drum — prototype V0.7
+PFD — Probabilistic Fractal Drum V0.9
 
-Put samples in the audio folder with these exact names:
-  kick.ogg
-  snare.ogg
-  hh.ogg
-  perc.ogg
+AUDIO FILES
+Put all samples in one folder named "audio" beside index.html.
 
-V0.7 additions:
-- per-track 1/2-time button above each expanded tree
-- low-pass filter knob per channel
-- larger 2x2 mixer faders with parameter colours
-- darker ochre Swing control
-- raised track buttons/tree assembly for a more centered layout
+Expected filenames:
+  kick1.ogg  kick2.ogg  kick3.ogg  kick4.ogg  kick5.ogg
+  snare1.ogg snare2.ogg snare3.ogg snare4.ogg snare5.ogg
+  hh1.ogg    hh2.ogg    hh3.ogg    hh4.ogg    hh5.ogg
+  perc1.ogg  perc2.ogg  perc3.ogg  perc4.ogg  perc5.ogg
 
-Controls remain live while playing.
+Slot 1 also accepts the older filenames kick.ogg, snare.ogg, hh.ogg and perc.ogg
+so an existing V0.7 audio folder still works while you rename things.
+
+The SAMPLE 1–5 selectors switch live. All 20 samples are preloaded on PLAY.
+If a selected sample is missing, PFD uses its synthesized fallback for that hit.

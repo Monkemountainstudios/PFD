@@ -3,8 +3,7 @@ const TRACK_COUNT = 4;
 const W = 200;
 const H = 430;
 const yLevels = [368, 270, 172, 74];
-const samplePrefixes = ['kick', 'snare', 'hh', 'perc'];
-const SAMPLE_COUNT = 5;
+const sampleFiles = ['kick.ogg', 'snare.ogg', 'hh.ogg', 'perc.ogg'];
 
 const machine = document.querySelector('.machine');
 const treesHost = document.getElementById('trees');
@@ -70,9 +69,8 @@ function createTrack(index) {
     visible: false,
     muted: false,
     path: null,
-    buffers: new Array(SAMPLE_COUNT).fill(null),
-    sampleStates: new Array(SAMPLE_COUNT).fill('idle'),
-    selectedSample: 0,
+    buffer: null,
+    loadAttempted: false,
     mode: 'variation', halfTime: false, localStep: 0,
     tune: 0, volume: 1, pan: 0, reverb: 0.08, filterHz: 20000,
     filterNode: null, gainNode: null, panNode: null, sendGain: null
@@ -223,41 +221,19 @@ function setupAudioRouting() {
   });
 }
 
-async function loadSampleSlot(track, slot) {
-  if (track.sampleStates[slot] === 'loaded') return track.buffers[slot];
-  if (track.sampleStates[slot] === 'loading') return null;
-  track.sampleStates[slot] = 'loading';
-
-  const prefix = samplePrefixes[track.index];
-  const candidates = [`audio/${prefix}${slot + 1}.ogg`];
-  // Backward compatibility while the first sample is being renamed.
-  if (slot === 0) candidates.push(`audio/${prefix}.ogg`);
-
-  for (const file of candidates) {
-    try {
-      const response = await fetch(file);
-      if (!response.ok) continue;
-      const bytes = await response.arrayBuffer();
-      track.buffers[slot] = await audioCtx.decodeAudioData(bytes);
-      track.sampleStates[slot] = 'loaded';
-      console.log(`${file} loaded`);
-      updateSampleButtonState(track.index, slot, true);
-      return track.buffers[slot];
-    } catch (err) {
-      console.warn(`Could not load ${file}`, err);
-    }
+async function loadTrackSample(track) {
+  if (track.loadAttempted) return track.buffer;
+  track.loadAttempted = true;
+  try {
+    const response = await fetch(`audio/${sampleFiles[track.index]}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const bytes = await response.arrayBuffer();
+    track.buffer = await audioCtx.decodeAudioData(bytes);
+    console.log(`${sampleFiles[track.index]} loaded`);
+  } catch (err) {
+    console.warn(`${sampleFiles[track.index]} not found; using synthesized fallback.`, err);
   }
-
-  track.sampleStates[slot] = 'missing';
-  updateSampleButtonState(track.index, slot, false);
-  console.warn(`${prefix}${slot + 1}.ogg not found; synthesized fallback will be used for this slot.`);
-  return null;
-}
-
-async function loadAllSamples() {
-  await Promise.all(tracks.flatMap(track =>
-    Array.from({ length: SAMPLE_COUNT }, (_, slot) => loadSampleSlot(track, slot))
-  ));
+  return track.buffer;
 }
 
 function synthFallback(trackIndex, time) {
@@ -307,10 +283,9 @@ function synthFallback(trackIndex, time) {
 
 function triggerTrack(track, time) {
   if (track.muted) return;
-  const buffer = track.buffers[track.selectedSample];
-  if (buffer) {
+  if (track.buffer) {
     const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = track.buffer;
     source.playbackRate.value = Math.pow(2, track.tune / 12);
     source.connect(track.filterNode || track.gainNode || audioCtx.destination);
     source.start(time);
@@ -412,7 +387,7 @@ async function startSequencer() {
   if (!audioCtx) audioCtx = new AudioContext();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
   setupAudioRouting();
-  await loadAllSamples();
+  await Promise.all(tracks.map(loadTrackSample));
 
   isPlaying = true;
   transport.setAttribute('aria-pressed', 'true');
@@ -477,32 +452,9 @@ function setFilterVisual(channel, value) {
   knob.title = hz >= 1000 ? `${(hz/1000).toFixed(1)} kHz` : `${hz} Hz`;
 }
 
-function updateSampleButtonState(trackIndex, slot, loaded) {
-  const channel = channels[trackIndex];
-  if (!channel) return;
-  const button = channel.querySelector(`.sample-button[data-sample="${slot}"]`);
-  if (!button) return;
-  button.classList.toggle('missing', loaded === false);
-  button.title = loaded === false
-    ? `${samplePrefixes[trackIndex]}${slot + 1}.ogg missing — fallback sound will be used`
-    : `${samplePrefixes[trackIndex]}${slot + 1}.ogg`;
-}
-
 channels.forEach((channel, i) => {
   const t = channel.querySelector('.tune'), v = channel.querySelector('.volume'), p = channel.querySelector('.pan'), r = channel.querySelector('.reverb'), f = channel.querySelector('.filter');
   const fk = channel.querySelector('.filter-knob');
-  const sampleButtons = [...channel.querySelectorAll('.sample-button')];
-  sampleButtons.forEach((button, slot) => {
-    button.addEventListener('click', async () => {
-      tracks[i].selectedSample = slot;
-      sampleButtons.forEach((b, n) => {
-        const selected = n === slot;
-        b.classList.toggle('selected', selected);
-        b.setAttribute('aria-pressed', String(selected));
-      });
-      if (audioCtx && tracks[i].sampleStates[slot] === 'idle') await loadSampleSlot(tracks[i], slot);
-    });
-  });
   const apply = () => {
     const tr = tracks[i]; tr.tune=Number(t.value); tr.volume=Number(v.value)/100; tr.pan=Number(p.value)/100; tr.reverb=Number(r.value)/100; tr.filterHz=filterFromSlider(f.value);
     if (tr.gainNode) tr.gainNode.gain.setTargetAtTime(tr.muted?0:tr.volume,audioCtx.currentTime,.01);
