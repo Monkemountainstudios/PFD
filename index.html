@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fractal Drum Prototype V0.6</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="machine-shell">
+    <section class="machine" aria-label="Fractal drum prototype">
+      <div class="brand">FRACTAL DRUM</div>
+
+      <div class="tempo-block">
+        <div class="knob" id="tempoKnob" role="slider" aria-label="Tempo" aria-valuemin="20" aria-valuemax="240" aria-valuenow="90">
+          <span></span>
+        </div>
+        <label for="tempo">TEMPO</label>
+        <input id="tempo" type="range" min="20" max="240" value="90" tabindex="-1" />
+        <output id="tempoValue">90 BPM</output>
+        <div class="swing-block">
+          <label for="swing">SWING</label>
+          <input id="swing" type="range" min="50" max="75" value="50" />
+          <output id="swingValue">50%</output>
+        </div>
+      </div>
+
+      <div id="trees"></div>
+
+      <div class="track-row" id="trackRow">
+        <button class="track-button" data-track="0" type="button" aria-pressed="false">1</button>
+        <button class="track-button" data-track="1" type="button" aria-pressed="false">2</button>
+        <button class="track-button" data-track="2" type="button" aria-pressed="false">3</button>
+        <button class="track-button" data-track="3" type="button" aria-pressed="false">4</button>
+      </div>
+
+      <div class="utility-column">
+        <div class="mixer" aria-label="Four channel mixer">
+          <div class="mixer-row-label">MIX</div>
+          <div class="channels">
+            <div class="channel" data-track="0"><div class="channel-num">1</div><label>T<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label><label>V<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label><label>P<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label><label>R<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label></div>
+            <div class="channel" data-track="1"><div class="channel-num">2</div><label>T<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label><label>V<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label><label>P<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label><label>R<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label></div>
+            <div class="channel" data-track="2"><div class="channel-num">3</div><label>T<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label><label>V<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label><label>P<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label><label>R<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label></div>
+            <div class="channel" data-track="3"><div class="channel-num">4</div><label>T<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label><label>V<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label><label>P<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label><label>R<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label></div>
+          </div>
+          <div class="mix-key">TUNE · VOL · PAN · REV</div>
+        </div>
+        <div class="mute-block">
+          <div class="utility-label">MUTE</div>
+          <div class="mute-row">
+            <button class="mute-button" data-track="0" type="button" aria-pressed="false">1</button>
+            <button class="mute-button" data-track="1" type="button" aria-pressed="false">2</button>
+            <button class="mute-button" data-track="2" type="button" aria-pressed="false">3</button>
+            <button class="mute-button" data-track="3" type="button" aria-pressed="false">4</button>
+          </div>
+        </div>
+        <button id="transport" class="transport-button" type="button" aria-pressed="false">PLAY</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="program.js"></script>
+</body>
+</html>
