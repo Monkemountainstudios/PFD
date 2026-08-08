@@ -16,6 +16,13 @@ const tempoKnob = document.getElementById('tempoKnob');
 const tempoValue = document.getElementById('tempoValue');
 const swing = document.getElementById('swing');
 const swingValue = document.getElementById('swingValue');
+const lfoRate = document.getElementById('lfoRate');
+const lfoDepth = document.getElementById('lfoDepth');
+const lfoRateKnob = document.getElementById('lfoRateKnob');
+const lfoDepthKnob = document.getElementById('lfoDepthKnob');
+const lfoRateValue = document.getElementById('lfoRateValue');
+const lfoDepthValue = document.getElementById('lfoDepthValue');
+const lfoRouteButtons = [...document.querySelectorAll('.lfo-route-button')];
 const channels = [...document.querySelectorAll('.channel')];
 const knobIndicator = document.querySelector('#tempoKnob span');
 
@@ -75,7 +82,8 @@ function createTrack(index) {
     selectedSample: 0,
     mode: 'variation', halfTime: false, localStep: 0,
     tune: 0, volume: 1, pan: 0, reverb: 0.08, filterHz: 20000,
-    filterNode: null, gainNode: null, panNode: null, sendGain: null
+    filterNode: null, gainNode: null, panNode: null, sendGain: null,
+    lfoEnabled: false, lfoGain: null
   };
 
   for (let level = 0; level < LEVELS; level++) {
@@ -209,9 +217,41 @@ function createImpulse(seconds = 1.05, decay = 2.4) {
   return impulse;
 }
 let reverbNode = null;
+let lfoOsc = null;
+
+function lfoRateFromSlider(value) {
+  const min = 0.03, max = 8;
+  const t = Number(value) / 100;
+  return min * Math.pow(max / min, t);
+}
+
+function setupLfo() {
+  if (lfoOsc) return;
+  lfoOsc = audioCtx.createOscillator();
+  lfoOsc.type = 'sine';
+  lfoOsc.frequency.value = lfoRateFromSlider(lfoRate.value);
+  tracks.forEach(track => {
+    track.lfoGain = audioCtx.createGain();
+    track.lfoGain.gain.value = track.lfoEnabled ? Number(lfoDepth.value) * 100 : 0;
+    lfoOsc.connect(track.lfoGain);
+  });
+  lfoOsc.start();
+}
+
+function updateLfoAudio() {
+  if (!audioCtx || !lfoOsc) return;
+  lfoOsc.frequency.setTargetAtTime(lfoRateFromSlider(lfoRate.value), audioCtx.currentTime, 0.02);
+  tracks.forEach(track => {
+    if (!track.lfoGain) return;
+    const cents = track.lfoEnabled ? Number(lfoDepth.value) * 100 : 0;
+    track.lfoGain.gain.setTargetAtTime(cents, audioCtx.currentTime, 0.02);
+  });
+}
+
 function setupAudioRouting() {
   if (reverbNode) return;
   reverbNode = audioCtx.createConvolver(); reverbNode.buffer = createImpulse(); reverbNode.connect(audioCtx.destination);
+  setupLfo();
   tracks.forEach(track => {
     track.filterNode = audioCtx.createBiquadFilter(); track.filterNode.type = 'lowpass'; track.filterNode.frequency.value = track.filterHz; track.filterNode.Q.value = 0.35;
     track.gainNode = audioCtx.createGain(); track.gainNode.gain.value = track.volume;
@@ -312,6 +352,7 @@ function triggerTrack(track, time) {
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
     source.playbackRate.value = Math.pow(2, track.tune / 12);
+    if (track.lfoEnabled && track.lfoGain) track.lfoGain.connect(source.detune);
     source.connect(track.filterNode || track.gainNode || audioCtx.destination);
     source.start(time);
   } else {
@@ -526,6 +567,66 @@ channels.forEach((channel, i) => {
 });
 swing.addEventListener('input',()=>{ swingValue.value=`${swing.value}%`; });
 
+
+function setMiniKnobVisual(knob, slider, minDeg = 135, sweep = 270) {
+  const indicator = knob.querySelector('span');
+  const t = Number(slider.value) / 100;
+  indicator.style.transform = `rotate(${minDeg + t * sweep}deg)`;
+}
+
+function updateLfoUi() {
+  const hz = lfoRateFromSlider(lfoRate.value);
+  lfoRateValue.value = hz < 1 ? `${hz.toFixed(2)} Hz` : `${hz.toFixed(1)} Hz`;
+  lfoDepthValue.value = `${Number(lfoDepth.value).toFixed(0)} st`;
+  setMiniKnobVisual(lfoRateKnob, lfoRate);
+  setMiniKnobVisual(lfoDepthKnob, lfoDepth);
+  updateLfoAudio();
+}
+
+function attachMiniKnob(knob, slider, resetValue) {
+  let active = false;
+  let lastY = 0;
+  knob.addEventListener('pointerdown', event => {
+    active = true;
+    lastY = event.clientY;
+    knob.setPointerCapture(event.pointerId);
+  });
+  knob.addEventListener('pointermove', event => {
+    if (!active) return;
+    const delta = lastY - event.clientY;
+    if (Math.abs(delta) >= 1) {
+      slider.value = String(Math.max(0, Math.min(100, Number(slider.value) + delta)));
+      lastY = event.clientY;
+      updateLfoUi();
+    }
+  });
+  knob.addEventListener('pointerup', () => { active = false; });
+  knob.addEventListener('pointercancel', () => { active = false; });
+  knob.addEventListener('wheel', event => {
+    event.preventDefault();
+    slider.value = String(Math.max(0, Math.min(100, Number(slider.value) + (event.deltaY < 0 ? 2 : -2))));
+    updateLfoUi();
+  }, { passive: false });
+  knob.addEventListener('dblclick', () => {
+    slider.value = String(resetValue);
+    updateLfoUi();
+  });
+}
+
+lfoRouteButtons.forEach((button, i) => {
+  button.addEventListener('click', () => {
+    tracks[i].lfoEnabled = !tracks[i].lfoEnabled;
+    button.setAttribute('aria-pressed', String(tracks[i].lfoEnabled));
+    updateLfoAudio();
+  });
+});
+
+lfoRate.addEventListener('input', updateLfoUi);
+lfoDepth.addEventListener('input', updateLfoUi);
+attachMiniKnob(lfoRateKnob, lfoRate, 42);
+attachMiniKnob(lfoDepthKnob, lfoDepth, 0);
+
+
 transport.addEventListener('click', () => {
   if (isPlaying) stopSequencer();
   else startSequencer();
@@ -561,3 +662,4 @@ window.addEventListener('resize', alignTrees);
 
 alignTrees();
 setTempo(Number(tempo.value));
+updateLfoUi();

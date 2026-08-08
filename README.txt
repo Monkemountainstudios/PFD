@@ -14,3 +14,12 @@ so an existing V0.7 audio folder still works while you rename things.
 
 The SAMPLE 1–5 selectors switch live. All 20 samples are preloaded on PLAY.
 If a selected sample is missing, PFD uses its synthesized fallback for that hit.
+
+
+PFD V0.10 LFO
+- One global sine LFO modulates sample detune.
+- RATE: 0.03 to 8 Hz, logarithmic.
+- DEPTH: 0 to +/-24 semitones.
+- Route buttons 1-4 choose which tracks receive the LFO.
+- Each track's normal TUNE setting remains the centre pitch.
+- LFO routing/rate/depth can all be changed live.
