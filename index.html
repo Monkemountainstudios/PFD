@@ -3,50 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PFD Prototype V0.10</title>
+  <title>PFD - Probabilistic Fractal Drums V0.11</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="machine-shell">
     <section class="machine" aria-label="Fractal drum prototype">
-      <div class="brand">PFD - Probablistic Fractal Drums</div>
+      <div class="brand">PFD - Probabilistic Fractal Drums</div>
 
-      <div class="tempo-block">
-        <div class="knob" id="tempoKnob" role="slider" aria-label="Tempo" aria-valuemin="20" aria-valuemax="240" aria-valuenow="90">
-          <span></span>
+      <div class="master-controls" aria-label="Master timing controls">
+        <div class="tempo-block">
+          <div class="knob" id="tempoKnob" role="slider" aria-label="Tempo" aria-valuemin="20" aria-valuemax="240" aria-valuenow="90">
+            <span></span>
+          </div>
+          <label for="tempo">TEMPO</label>
+          <input id="tempo" type="range" min="20" max="240" value="90" tabindex="-1" />
+          <output id="tempoValue">90 BPM</output>
         </div>
-        <label for="tempo">TEMPO</label>
-        <input id="tempo" type="range" min="20" max="240" value="90" tabindex="-1" />
-        <output id="tempoValue">90 BPM</output>
+
         <div class="swing-block">
           <label for="swing">SWING</label>
           <input id="swing" type="range" min="50" max="75" value="50" />
           <output id="swingValue">50%</output>
         </div>
+      </div>
 
-        <div class="lfo-block" aria-label="Global tune LFO">
-          <div class="lfo-title">LFO</div>
-          <div class="lfo-knobs">
-            <label>
-              <span>RATE</span>
-              <div class="mini-knob" id="lfoRateKnob" role="slider" aria-label="LFO rate"><span></span></div>
-              <input id="lfoRate" type="range" min="0" max="100" value="42" tabindex="-1" />
-              <output id="lfoRateValue">0.31 Hz</output>
-            </label>
-            <label>
-              <span>DEPTH</span>
-              <div class="mini-knob" id="lfoDepthKnob" role="slider" aria-label="LFO tune depth"><span></span></div>
-              <input id="lfoDepth" type="range" min="0" max="24" value="0" tabindex="-1" />
-              <output id="lfoDepthValue">0 st</output>
-            </label>
-          </div>
-          <div class="lfo-route-label">TUNE ROUTE</div>
-          <div class="lfo-route-row">
-            <button class="lfo-route-button" type="button" aria-pressed="false">1</button>
-            <button class="lfo-route-button" type="button" aria-pressed="false">2</button>
-            <button class="lfo-route-button" type="button" aria-pressed="false">3</button>
-            <button class="lfo-route-button" type="button" aria-pressed="false">4</button>
-          </div>
+      <div class="lfo-block" aria-label="Global tune LFO">
+        <div class="lfo-title">LFO</div>
+        <div class="lfo-knobs">
+          <label>
+            <span>RATE</span>
+            <div class="mini-knob" id="lfoRateKnob" role="slider" aria-label="LFO rate"><span></span></div>
+            <input id="lfoRate" type="range" min="0" max="100" value="42" tabindex="-1" />
+            <output id="lfoRateValue">0.31 Hz</output>
+          </label>
+          <label>
+            <span>DEPTH</span>
+            <div class="mini-knob" id="lfoDepthKnob" role="slider" aria-label="LFO tune depth"><span></span></div>
+            <input id="lfoDepth" type="range" min="0" max="24" value="0" tabindex="-1" />
+            <output id="lfoDepthValue">0 st</output>
+          </label>
+        </div>
+        <div class="lfo-wave-label">WAVE</div>
+        <div class="lfo-wave-row">
+          <button class="lfo-wave-button active" data-wave="sine" type="button" aria-pressed="true">SINE</button>
+          <button class="lfo-wave-button" data-wave="square" type="button" aria-pressed="false">SQUARE</button>
+        </div>
+        <div class="lfo-route-label">TUNE ROUTE</div>
+        <div class="lfo-route-row">
+          <button class="lfo-route-button" type="button" aria-pressed="false">1</button>
+          <button class="lfo-route-button" type="button" aria-pressed="false">2</button>
+          <button class="lfo-route-button" type="button" aria-pressed="false">3</button>
+          <button class="lfo-route-button" type="button" aria-pressed="false">4</button>
         </div>
       </div>
 

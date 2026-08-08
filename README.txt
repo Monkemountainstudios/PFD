@@ -23,3 +23,9 @@ PFD V0.10 LFO
 - Route buttons 1-4 choose which tracks receive the LFO.
 - Each track's normal TUNE setting remains the centre pitch.
 - LFO routing/rate/depth can all be changed live.
+
+V0.11
+- Tempo and Swing moved to a global top control strip.
+- LFO moved to its own upper-right modulation bay.
+- Added SINE / SQUARE LFO waveform selection.
+- LFO routing remains per track; no route buttons = no audible modulation.

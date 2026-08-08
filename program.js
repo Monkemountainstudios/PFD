@@ -23,6 +23,7 @@ const lfoDepthKnob = document.getElementById('lfoDepthKnob');
 const lfoRateValue = document.getElementById('lfoRateValue');
 const lfoDepthValue = document.getElementById('lfoDepthValue');
 const lfoRouteButtons = [...document.querySelectorAll('.lfo-route-button')];
+const lfoWaveButtons = [...document.querySelectorAll('.lfo-wave-button')];
 const channels = [...document.querySelectorAll('.channel')];
 const knobIndicator = document.querySelector('#tempoKnob span');
 
@@ -218,6 +219,7 @@ function createImpulse(seconds = 1.05, decay = 2.4) {
 }
 let reverbNode = null;
 let lfoOsc = null;
+let lfoWave = 'sine';
 
 function lfoRateFromSlider(value) {
   const min = 0.03, max = 8;
@@ -228,7 +230,7 @@ function lfoRateFromSlider(value) {
 function setupLfo() {
   if (lfoOsc) return;
   lfoOsc = audioCtx.createOscillator();
-  lfoOsc.type = 'sine';
+  lfoOsc.type = lfoWave;
   lfoOsc.frequency.value = lfoRateFromSlider(lfoRate.value);
   tracks.forEach(track => {
     track.lfoGain = audioCtx.createGain();
@@ -612,6 +614,18 @@ function attachMiniKnob(knob, slider, resetValue) {
     updateLfoUi();
   });
 }
+
+lfoWaveButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    lfoWave = button.dataset.wave === 'square' ? 'square' : 'sine';
+    lfoWaveButtons.forEach(other => {
+      const selected = other.dataset.wave === lfoWave;
+      other.classList.toggle('active', selected);
+      other.setAttribute('aria-pressed', String(selected));
+    });
+    if (lfoOsc) lfoOsc.type = lfoWave;
+  });
+});
 
 lfoRouteButtons.forEach((button, i) => {
   button.addEventListener('click', () => {
