@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PFD - Probabilistic Fractal Drums V0.11</title>
+  <title>PFD - Probabilistic Fractal Drums V2.0</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -69,12 +69,12 @@
 
       <div class="utility-column">
         <div class="mixer" aria-label="Four channel mixer">
-          <div class="mixer-row-label">MIX</div>
+          <div class="mixer-row-label">MIXER</div>
           <div class="channels">
             <div class="channel" data-track="0">
               <div class="channel-num">1</div>
               <div class="sample-bank" aria-label="Track 1 sample selector">
-                <div class="sample-label">SAMPLE</div>
+                <div class="sample-label">KICKS</div>
                 <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
                 <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
                 <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
@@ -92,7 +92,7 @@
             <div class="channel" data-track="1">
               <div class="channel-num">2</div>
               <div class="sample-bank" aria-label="Track 2 sample selector">
-                <div class="sample-label">SAMPLE</div>
+                <div class="sample-label">SNARES</div>
                 <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
                 <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
                 <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
@@ -110,7 +110,7 @@
             <div class="channel" data-track="2">
               <div class="channel-num">3</div>
               <div class="sample-bank" aria-label="Track 3 sample selector">
-                <div class="sample-label">SAMPLE</div>
+                <div class="sample-label">High-Hats</div>
                 <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
                 <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
                 <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
@@ -128,12 +128,12 @@
             <div class="channel" data-track="3">
               <div class="channel-num">4</div>
               <div class="sample-bank" aria-label="Track 4 sample selector">
-                <div class="sample-label">SAMPLE</div>
+                <div class="sample-label">PERC</div>
                 <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
                 <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
                 <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
                 <button class="sample-button" data-sample="3" type="button" aria-pressed="false">4</button>
-                <button class="sample-button" data-sample="4" type="button" aria-pressed="false">5</button>
+                <button class="sample-button" data-sample="4" type="button" aria-pressed="false">?</button>
               </div>
               <label class="filter-label">FILTER<div class="filter-knob" role="slider" aria-label="Track 4 low pass filter" aria-valuemin="200" aria-valuemax="20000" aria-valuenow="20000"><span></span></div><input class="filter" type="range" min="0" max="100" value="100" tabindex="-1"></label>
               <div class="fader-grid">
@@ -159,6 +159,6 @@
     </section>
   </main>
 
-  <script src="program.js"></script>
+  <script src="program.js"V2.0></script>
 </body>
 </html>
