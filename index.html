@@ -58,6 +58,23 @@
         </div>
       </div>
 
+
+      <button id="midiButton" class="midi-button" type="button" aria-haspopup="dialog" aria-expanded="false">MIDI</button>
+
+      <div id="midiOverlay" class="midi-overlay" hidden>
+        <div class="midi-panel" role="dialog" aria-modal="true" aria-labelledby="midiTitle">
+          <button id="midiClose" class="midi-close" type="button" aria-label="Close MIDI settings">×</button>
+          <div id="midiTitle" class="midi-title">MIDI CLOCK</div>
+          <label class="midi-field">
+            <span>INPUT</span>
+            <select id="midiInput"><option value="">No MIDI input</option></select>
+          </label>
+          <div class="midi-status-row"><span>STATUS</span><output id="midiStatus">OFF</output></div>
+          <div class="midi-status-row"><span>CLOCK</span><output id="midiBpm">-- BPM</output></div>
+          <div class="midi-note">TEST MODE: clock detection only. PFD still runs on its internal clock.</div>
+        </div>
+      </div>
+
       <div id="trees"></div>
 
       <div class="track-row" id="trackRow">
@@ -159,6 +176,6 @@
     </section>
   </main>
 
-  <script src="program.js"V2.0></script>
+  <script src="program.js"></script>
 </body>
 </html>

@@ -26,6 +26,12 @@ const lfoRouteButtons = [...document.querySelectorAll('.lfo-route-button')];
 const lfoWaveButtons = [...document.querySelectorAll('.lfo-wave-button')];
 const channels = [...document.querySelectorAll('.channel')];
 const knobIndicator = document.querySelector('#tempoKnob span');
+const midiButton = document.getElementById('midiButton');
+const midiOverlay = document.getElementById('midiOverlay');
+const midiClose = document.getElementById('midiClose');
+const midiInputSelect = document.getElementById('midiInput');
+const midiStatus = document.getElementById('midiStatus');
+const midiBpm = document.getElementById('midiBpm');
 
 const tracks = [];
 let audioCtx = null;
@@ -191,6 +197,17 @@ function setTempo(bpm) {
   tempoValue.value = `${clamped} BPM`;
   tempoKnob.setAttribute('aria-valuenow', String(clamped));
 
+  const t = (clamped - min) / (max - min);
+  const degrees = 135 + t * 270;
+  knobIndicator.style.transform = `rotate(${degrees}deg)`;
+}
+
+function setTempoVisualOnly(bpm) {
+  const min = Number(tempo.min);
+  const max = Number(tempo.max);
+  const clamped = Math.max(min, Math.min(max, Math.round(bpm)));
+  tempoValue.value = `${clamped} BPM`;
+  tempoKnob.setAttribute('aria-valuenow', String(clamped));
   const t = (clamped - min) / (max - min);
   const degrees = 135 + t * 270;
   knobIndicator.style.transform = `rotate(${degrees}deg)`;
@@ -645,6 +662,154 @@ lfoRate.addEventListener('input', updateLfoUi);
 lfoDepth.addEventListener('input', updateLfoUi);
 attachMiniKnob(lfoRateKnob, lfoRate, 42);
 attachMiniKnob(lfoDepthKnob, lfoDepth, 0);
+
+
+// ---- MIDI CLOCK TEST LAYER (display only; does not drive the sequencer yet) ----
+let midiAccess = null;
+let activeMidiInput = null;
+let midiClockTimes = [];
+let midiClockCount = 0;
+let midiLastClockAt = 0;
+let midiClockLostTimer = null;
+let midiPulseTimer = null;
+
+function setMidiStatus(text) {
+  if (midiStatus) midiStatus.value = text;
+}
+
+function restoreInternalTempoVisual() {
+  setTempoVisualOnly(Number(tempo.value));
+}
+
+function clearMidiClockState(showLost = false) {
+  midiClockTimes = [];
+  midiClockCount = 0;
+  midiLastClockAt = 0;
+  if (midiBpm) midiBpm.value = '-- BPM';
+  if (showLost) setMidiStatus(activeMidiInput ? 'NO CLOCK' : 'OFF');
+  restoreInternalTempoVisual();
+}
+
+function flashMidiButton() {
+  if (!midiButton) return;
+  midiButton.classList.add('clock-pulse');
+  if (midiPulseTimer) clearTimeout(midiPulseTimer);
+  midiPulseTimer = setTimeout(() => midiButton.classList.remove('clock-pulse'), 80);
+}
+
+function updateMidiBpm(timestamp) {
+  midiClockTimes.push(timestamp);
+  if (midiClockTimes.length > 25) midiClockTimes.shift();
+  if (midiClockTimes.length < 7) return;
+
+  const elapsed = midiClockTimes[midiClockTimes.length - 1] - midiClockTimes[0];
+  const intervals = midiClockTimes.length - 1;
+  if (elapsed <= 0) return;
+
+  const msPerClock = elapsed / intervals;
+  const bpm = 60000 / (msPerClock * 24);
+  if (!Number.isFinite(bpm) || bpm < 20 || bpm > 300) return;
+
+  const rounded = Math.round(bpm);
+  midiBpm.value = `${rounded} BPM`;
+  setMidiStatus('CLOCK');
+  setTempoVisualOnly(rounded);
+}
+
+function handleMidiMessage(event) {
+  const status = event.data && event.data[0];
+  if (status !== 0xF8) return; // MIDI Timing Clock only
+
+  const now = event.timeStamp || performance.now();
+  midiLastClockAt = now;
+  midiClockCount = (midiClockCount + 1) % 24;
+  updateMidiBpm(now);
+
+  // Blink on quarter notes, not on all 24 clock pulses.
+  if (midiClockCount === 0) flashMidiButton();
+
+  if (midiClockLostTimer) clearTimeout(midiClockLostTimer);
+  midiClockLostTimer = setTimeout(() => {
+    const age = performance.now() - midiLastClockAt;
+    if (age > 650) clearMidiClockState(true);
+  }, 700);
+}
+
+function disconnectMidiInput() {
+  if (activeMidiInput) activeMidiInput.onmidimessage = null;
+  activeMidiInput = null;
+  midiButton?.classList.remove('connected', 'clock-pulse');
+  clearMidiClockState(false);
+}
+
+function connectMidiInput(id) {
+  disconnectMidiInput();
+  if (!midiAccess || !id) { setMidiStatus('OFF'); return; }
+  const input = midiAccess.inputs.get(id);
+  if (!input) { setMidiStatus('MISSING'); return; }
+  activeMidiInput = input;
+  activeMidiInput.onmidimessage = handleMidiMessage;
+  midiButton?.classList.add('connected');
+  setMidiStatus('READY');
+}
+
+function populateMidiInputs() {
+  if (!midiInputSelect || !midiAccess) return;
+  const previous = activeMidiInput?.id || midiInputSelect.value;
+  midiInputSelect.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = 'No MIDI input';
+  midiInputSelect.appendChild(none);
+  for (const input of midiAccess.inputs.values()) {
+    const option = document.createElement('option');
+    option.value = input.id;
+    option.textContent = input.name || input.manufacturer || 'MIDI input';
+    midiInputSelect.appendChild(option);
+  }
+  if ([...midiInputSelect.options].some(o => o.value === previous)) {
+    midiInputSelect.value = previous;
+  }
+}
+
+async function ensureMidiAccess() {
+  if (midiAccess) return true;
+  if (!navigator.requestMIDIAccess) {
+    setMidiStatus('UNAVAILABLE');
+    return false;
+  }
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+    midiAccess.onstatechange = () => {
+      populateMidiInputs();
+      if (activeMidiInput && !midiAccess.inputs.get(activeMidiInput.id)) disconnectMidiInput();
+    };
+    populateMidiInputs();
+    setMidiStatus('READY');
+    return true;
+  } catch (err) {
+    console.warn('MIDI access denied or unavailable', err);
+    setMidiStatus('DENIED');
+    return false;
+  }
+}
+
+async function openMidiOverlay() {
+  midiOverlay.hidden = false;
+  midiButton.setAttribute('aria-expanded', 'true');
+  await ensureMidiAccess();
+}
+
+function closeMidiOverlay() {
+  midiOverlay.hidden = true;
+  midiButton.setAttribute('aria-expanded', 'false');
+}
+
+midiButton?.addEventListener('click', openMidiOverlay);
+midiClose?.addEventListener('click', closeMidiOverlay);
+midiOverlay?.addEventListener('click', event => { if (event.target === midiOverlay) closeMidiOverlay(); });
+window.addEventListener('keydown', event => { if (event.key === 'Escape' && !midiOverlay?.hidden) closeMidiOverlay(); });
+midiInputSelect?.addEventListener('change', () => connectMidiInput(midiInputSelect.value));
 
 
 transport.addEventListener('click', () => {
