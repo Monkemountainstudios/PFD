@@ -23,12 +23,12 @@ body {
   color: var(--ink);
 }
 
-.machine-shell { padding: 28px; }
+.machine-shell { padding: 28px; width: max-content; }
 
 .machine {
   position: relative;
-  width: min(1240px, 97vw);
-  height: min(760px, 88vh);
+  width: 1240px;
+  height: 760px;
   min-height: 620px;
   overflow: hidden;
   border: 5px solid var(--edge);
@@ -299,14 +299,7 @@ body {
   box-shadow: inset 0 0 0 2px #7b7460, 0 0 10px rgba(242,200,75,.20), 0 3px 7px rgba(0,0,0,.6);
 }
 
-@media (max-width: 900px) {
-  .machine-shell { padding: 10px; }
-  .machine { width: 98vw; min-height: 580px; }
-  .track-row { left: 2%; right: 27%; }
-  .tempo-block { right: 24px; transform: scale(.84); transform-origin: top right; }
-  .utility-column { right: 20px; transform: scale(.88); transform-origin: bottom right; }
-  .tree-area { transform-origin: bottom center; }
-}
+
 
 /* V0.6 controls */
 .swing-block { margin-top: 13px; }
@@ -340,10 +333,7 @@ body {
 }
 .mute-row { gap:10px; }
 
-@media (max-width: 900px) {
-  .utility-column { width:180px; }
-  .mix-slider { height:60px; }
-}
+
 
 /* V0.7: more tactile mixer, per-tree half time, and slightly raised track row */
 .track-row { bottom: 56px; }
@@ -390,15 +380,7 @@ body {
 .half-time { position:absolute; top:14px; left:50%; transform:translateX(-50%); width:34px; height:27px; padding:0; border:3px solid #050505; border-radius:2px; background:#27251e; color:#aaa79e; font-size:13px; box-shadow:inset 0 0 0 1px #4f4b40; cursor:pointer; z-index:4; }
 .half-time[aria-pressed="true"] { background:var(--step); color:#17130a; box-shadow:inset 0 0 0 1px var(--step-hi),0 0 9px rgba(198,144,24,.5); }
 
-@media (max-width: 900px) {
-  .track-row { bottom:50px; }
-  .tree-area { bottom:126px; }
-  .utility-column { width:205px; right:8px; }
-  .mixer { width:205px; }
-  .channels { gap:4px; }
-  .fader-grid { grid-template-columns:repeat(2,20px); gap:4px 3px; }
-  .mix-slider { height:50px; width:18px; }
-}
+
 
 /* V0.9 sample selectors */
 .sample-bank {
@@ -547,9 +529,7 @@ body {
   box-shadow: inset 0 0 0 1px #777ce8, 0 0 7px rgba(103,108,220,.42);
 }
 
-@media (max-width: 900px) {
-  .lfo-block { transform: scale(.92); transform-origin: top center; margin-top: 7px; }
-}
+
 
 /* V0.11: global timing across the top; dedicated LFO bay at upper-right */
 .master-controls {
@@ -666,7 +646,11 @@ body {
 
 .lfo-route-label { margin-top: 6px; }
 
-@media (max-width: 1050px) {
-  .master-controls { left: 29%; transform: scale(.92); transform-origin: top center; }
-  .lfo-block { right: 8px; transform: scale(.88); transform-origin: top right; }
-}
+
+
+
+/* SIZE LOCK: fixed desktop panel; smaller windows scroll instead of reflowing/scaling. */
+html,body{min-width:0;overflow:auto}
+body{display:block;min-height:100vh}
+.machine-shell{width:max-content;min-width:1296px;margin:0;padding:28px}
+.machine{width:1240px;height:760px;min-width:1240px;max-width:1240px;min-height:760px;max-height:760px}
