@@ -213,13 +213,8 @@ function setTempoVisualOnly(bpm) {
   knobIndicator.style.transform = `rotate(${degrees}deg)`;
 }
 
-function currentTempoBpm() {
-  if (activeMidiInput && midiDetectedBpm) return midiDetectedBpm;
-  return Number(tempo.value);
-}
-
 function stepSeconds() {
-  return (60 / currentTempoBpm()) / 4;
+  return (60 / Number(tempo.value)) / 4;
 }
 
 function makeRandomPath() {
@@ -421,7 +416,7 @@ function animateBranch(track, childLevel, childIndex, audioTime, durationSec) {
 
 function flashHiddenTrackButtons(audioTime) {
   scheduleVisual(audioTime, () => {
-    const flashMs = Math.min(90, Math.max(45, (60 / currentTempoBpm()) * 170));
+    const flashMs = Math.min(90, Math.max(45, (60 / Number(tempo.value)) * 170));
     tracks.forEach((track, i) => {
       if (!track.visible && hasActiveNodes(track)) {
         const button = trackButtons[i];
@@ -484,18 +479,9 @@ async function startSequencer() {
   transport.textContent = 'STOP';
   stepIndex = 0;
   tracks.forEach(track => { track.path = null; track.localStep = 0; });
-  if (activeMidiInput) {
-    // External MIDI clock mode: stay armed and wait for incoming F8 pulses.
-    if (schedulerTimer) window.clearInterval(schedulerTimer);
-    schedulerTimer = null;
-    midiWaitForPairStart = true;
-    if (!midiDetectedBpm) setMidiStatus('WAITING');
-  } else {
-    // Original internal scheduler.
-    nextStepTime = audioCtx.currentTime + 0.06;
-    scheduler();
-    schedulerTimer = window.setInterval(scheduler, lookAheadMs);
-  }
+  nextStepTime = audioCtx.currentTime + 0.06;
+  scheduler();
+  schedulerTimer = window.setInterval(scheduler, lookAheadMs);
 }
 
 function stopSequencer() {
@@ -504,7 +490,6 @@ function stopSequencer() {
   transport.textContent = 'PLAY';
   if (schedulerTimer) window.clearInterval(schedulerTimer);
   schedulerTimer = null;
-  midiWaitForPairStart = true;
   document.querySelectorAll('.node.playhead').forEach(n => n.classList.remove('playhead'));
   document.querySelectorAll('.track-button.tempo-flash').forEach(b => b.classList.remove('tempo-flash'));
   document.querySelectorAll('.branch-pulse').forEach(line => {
@@ -679,14 +664,11 @@ attachMiniKnob(lfoRateKnob, lfoRate, 42);
 attachMiniKnob(lfoDepthKnob, lfoDepth, 0);
 
 
-// ---- MIDI CLOCK LAYER: external F8 clock can drive the sequencer ----
+// ---- MIDI CLOCK TEST LAYER (display only; does not drive the sequencer yet) ----
 let midiAccess = null;
 let activeMidiInput = null;
 let midiClockTimes = [];
 let midiClockCount = 0;
-let midiClockTicks = 0;
-let midiDetectedBpm = null;
-let midiWaitForPairStart = true;
 let midiLastClockAt = 0;
 let midiClockLostTimer = null;
 let midiPulseTimer = null;
@@ -702,8 +684,6 @@ function restoreInternalTempoVisual() {
 function clearMidiClockState(showLost = false) {
   midiClockTimes = [];
   midiClockCount = 0;
-  midiClockTicks = 0;
-  midiDetectedBpm = null;
   midiLastClockAt = 0;
   if (midiBpm) midiBpm.value = '-- BPM';
   if (showLost) setMidiStatus(activeMidiInput ? 'NO CLOCK' : 'OFF');
@@ -730,46 +710,10 @@ function updateMidiBpm(timestamp) {
   const bpm = 60000 / (msPerClock * 24);
   if (!Number.isFinite(bpm) || bpm < 20 || bpm > 300) return;
 
-  midiDetectedBpm = bpm;
   const rounded = Math.round(bpm);
   midiBpm.value = `${rounded} BPM`;
   setMidiStatus('CLOCK');
   setTempoVisualOnly(rounded);
-}
-
-function midiSwingPulsePosition() {
-  // One pair of 16ths occupies 12 MIDI clocks. At 50% the split is 6/6;
-  // at 75% it becomes 9/3, matching PFD's existing swing control.
-  const sw = Number(swing.value) / 100;
-  return Math.max(6, Math.min(9, Math.round(12 * sw)));
-}
-
-function midiEventAudioTime(event) {
-  if (!audioCtx) return 0;
-  const nowPerf = performance.now();
-  const stamp = Number(event.timeStamp) || nowPerf;
-  const eventOffset = Math.min(0.02, Math.max(-0.05, (stamp - nowPerf) / 1000));
-  return Math.max(audioCtx.currentTime + 0.001, audioCtx.currentTime + eventOffset + 0.002);
-}
-
-function driveSequencerFromMidiClock(event) {
-  if (!isPlaying || !audioCtx || !activeMidiInput) return;
-
-  // 24 PPQN = 6 clocks per straight 16th. Using a 12-clock pair lets
-  // the existing 50-75% SWING control delay every second 16th.
-  const phase = midiClockTicks % 12;
-  const swungOffbeat = midiSwingPulsePosition();
-
-  // On local PLAY, join at the next 12-clock pair boundary rather than
-  // dropping the first tree step onto a swung offbeat.
-  if (midiWaitForPairStart) {
-    if (phase !== 0) return;
-    midiWaitForPairStart = false;
-  } else if (phase !== 0 && phase !== swungOffbeat) {
-    return;
-  }
-
-  scheduleStep(midiEventAudioTime(event));
 }
 
 function handleMidiMessage(event) {
@@ -778,10 +722,8 @@ function handleMidiMessage(event) {
 
   const now = event.timeStamp || performance.now();
   midiLastClockAt = now;
-  midiClockTicks += 1;
   midiClockCount = (midiClockCount + 1) % 24;
   updateMidiBpm(now);
-  driveSequencerFromMidiClock(event);
 
   // Blink on quarter notes, not on all 24 clock pulses.
   if (midiClockCount === 0) flashMidiButton();
@@ -798,13 +740,6 @@ function disconnectMidiInput() {
   activeMidiInput = null;
   midiButton?.classList.remove('connected', 'clock-pulse');
   clearMidiClockState(false);
-
-  // If PFD is already playing, return seamlessly to the original internal clock.
-  if (isPlaying && audioCtx && !schedulerTimer) {
-    nextStepTime = audioCtx.currentTime + 0.03;
-    scheduler();
-    schedulerTimer = window.setInterval(scheduler, lookAheadMs);
-  }
 }
 
 function connectMidiInput(id) {
@@ -816,14 +751,6 @@ function connectMidiInput(id) {
   activeMidiInput.onmidimessage = handleMidiMessage;
   midiButton?.classList.add('connected');
   setMidiStatus('READY');
-
-  // Selecting an input means external-clock mode. If already playing,
-  // retire the internal look-ahead scheduler and wait for MIDI clock.
-  if (isPlaying && schedulerTimer) {
-    window.clearInterval(schedulerTimer);
-    schedulerTimer = null;
-    midiWaitForPairStart = true;
-  }
 }
 
 function populateMidiInputs() {
@@ -892,7 +819,6 @@ transport.addEventListener('click', () => {
 
 tempoKnob.addEventListener('wheel', event => {
   event.preventDefault();
-  if (activeMidiInput) return;
   setTempo(Number(tempo.value) + (event.deltaY < 0 ? 1 : -1));
 }, { passive: false });
 
@@ -900,7 +826,6 @@ let dragging = false;
 let lastY = 0;
 
 tempoKnob.addEventListener('pointerdown', event => {
-  if (activeMidiInput) return;
   dragging = true;
   lastY = event.clientY;
   tempoKnob.setPointerCapture(event.pointerId);
@@ -917,7 +842,7 @@ tempoKnob.addEventListener('pointermove', event => {
 
 tempoKnob.addEventListener('pointerup', () => { dragging = false; });
 tempoKnob.addEventListener('pointercancel', () => { dragging = false; });
-tempoKnob.addEventListener('dblclick', () => { if (!activeMidiInput) setTempo(90); });
+tempoKnob.addEventListener('dblclick', () => setTempo(90));
 window.addEventListener('resize', alignTrees);
 
 alignTrees();
