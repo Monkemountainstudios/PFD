@@ -31,20 +31,13 @@ V0.11
 - LFO routing remains per track; no route buttons = no audible modulation.
 
 
-V2.1 MIDI CLOCK TEST
-- Added MIDI button and temporary MIDI clock overlay.
-- Requests Web MIDI access and lists available MIDI inputs.
-- Detects MIDI Timing Clock (F8) only.
-- MIDI button flashes once per received quarter note.
-- Incoming BPM is averaged, displayed in the overlay, and mirrored by the main tempo knob/readout.
-- IMPORTANT: MIDI does NOT drive PFD timing yet; the sequencer still uses its internal tempo.
-- For a cross-origin iframe embed, the iframe may need: allow="midi"
-
-
-V2.2 MIDI ENGINE SYNC
-- Selecting a MIDI input switches PFD to external MIDI Clock (F8) timing.
-- PFD PLAY/STOP remains local; MIDI Start/Stop messages are ignored.
-- Incoming clock drives the 16th-note engine directly at 24 PPQN.
-- SWING remains active by splitting each 12-clock 16th pair from 6/6 up to 9/3.
-- The tempo knob/readout follows detected external BPM and is locked while MIDI input is selected.
-- Selecting No MIDI input returns PFD to its original internal scheduler.
+PFD V2.3 MIDI CLOCK + FA PHASE
+- Added Web MIDI clock input and MIDI status panel.
+- Incoming F8 drives the actual PFD engine: 6 F8 pulses = one PFD 1/16-note step.
+- Incoming BPM updates the existing tempo knob/readout.
+- Incoming FA resets the hidden musical phase to ONE but does not force PFD to play.
+- Incoming FC is shown as MASTER STOP; local PFD PLAY/STOP remains independent.
+- MIDI phase keeps counting while PFD is locally stopped.
+- Local PLAY joins the current external phase instead of resetting its own beat position.
+- F8-only sources still work; phase is prefixed with ~ because absolute ONE is unknown.
+- Selecting NO MIDI INPUT returns to the original internal Web Audio scheduler.

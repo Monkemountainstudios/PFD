@@ -3,13 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PFD - Probabilistic Fractal Drums V2.2 MIDI</title>
+  <title>PFD - Probabilistic Fractal Drums V2.3 MIDI/FA</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="machine-shell">
     <section class="machine" aria-label="Fractal drum prototype">
-      <div class="brand">PFD - Probabilistic Fractal Drums</div>
+      <div class="brand">PFD - ProbabilISTIC FRACTAL DRUMS</div>
+      <button id="midiButton" class="midi-button" type="button">MIDI</button>
+      <div id="midiPanel" class="midi-panel">
+        <div class="midi-title">MIDI CLOCK IN</div>
+        <label for="midiInput">INPUT</label>
+        <select id="midiInput">
+          <option value="">NO MIDI INPUT</option>
+        </select>
+        <div class="midi-readout">
+          <div>STATUS <strong id="midiStatus">OFF</strong></div>
+          <div>CLOCK <strong><span id="midiBpm">--</span> BPM</strong></div>
+          <div>PHASE <strong id="midiPhase">--</strong></div>
+        </div>
+        <div class="midi-note">F8 = clock · FA = establish ONE · FC = master stop indication. PLAY remains local.</div>
+      </div>
 
       <div class="master-controls" aria-label="Master timing controls">
         <div class="tempo-block">
@@ -55,23 +69,6 @@
           <button class="lfo-route-button" type="button" aria-pressed="false">2</button>
           <button class="lfo-route-button" type="button" aria-pressed="false">3</button>
           <button class="lfo-route-button" type="button" aria-pressed="false">4</button>
-        </div>
-      </div>
-
-
-      <button id="midiButton" class="midi-button" type="button" aria-haspopup="dialog" aria-expanded="false">MIDI</button>
-
-      <div id="midiOverlay" class="midi-overlay" hidden>
-        <div class="midi-panel" role="dialog" aria-modal="true" aria-labelledby="midiTitle">
-          <button id="midiClose" class="midi-close" type="button" aria-label="Close MIDI settings">×</button>
-          <div id="midiTitle" class="midi-title">MIDI CLOCK</div>
-          <label class="midi-field">
-            <span>INPUT</span>
-            <select id="midiInput"><option value="">No MIDI input</option></select>
-          </label>
-          <div class="midi-status-row"><span>STATUS</span><output id="midiStatus">OFF</output></div>
-          <div class="midi-status-row"><span>CLOCK</span><output id="midiBpm">-- BPM</output></div>
-          <div class="midi-note">MIDI IN selected = external clock. PLAY/STOP stays local.</div>
         </div>
       </div>
 
@@ -176,6 +173,6 @@
     </section>
   </main>
 
-  <script src="program.js"></script>
+  <script src="program.js?v=2.3"></script>
 </body>
 </html>
