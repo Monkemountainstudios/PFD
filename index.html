@@ -3,26 +3,42 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PFD - Probabilistic Fractal Drums V2.4 AUTOFILL</title>
+  <title>PFD - Probabilistic Fractal Drums V2.5 NMIDI</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="machine-shell">
     <section class="machine" aria-label="Fractal drum prototype">
       <div class="brand">PFD - ProbabilISTIC FRACTAL DRUMS</div>
-      <button id="midiButton" class="midi-button" type="button">MIDI</button>
+      <button id="midiButton" class="midi-button" type="button">CLOCK</button>
       <div id="midiPanel" class="midi-panel">
-        <div class="midi-title">MIDI CLOCK IN</div>
-        <label for="midiInput">INPUT</label>
+        <div class="midi-title">CLOCK / SYNC</div>
+
+        <label for="nmidiMode">NMIDI v3</label>
+        <select id="nmidiMode">
+          <option value="off" selected>OFF / LOCAL</option>
+          <option value="master">MASTER</option>
+          <option value="follow">FOLLOW</option>
+        </select>
+        <div class="midi-readout">
+          <div>NMIDI <strong id="nmidiStatus">OFF</strong></div>
+          <div>CLOCK <strong><span id="nmidiBpm">--</span> BPM</strong></div>
+          <div>SOURCE <strong id="nmidiSource">--</strong></div>
+          <div>PACKET <strong id="nmidiPacket">--</strong></div>
+        </div>
+
+        <div class="clock-divider"></div>
+
+        <label for="midiInput">WEB MIDI INPUT</label>
         <select id="midiInput">
           <option value="">NO MIDI INPUT</option>
         </select>
         <div class="midi-readout">
-          <div>STATUS <strong id="midiStatus">OFF</strong></div>
+          <div>MIDI <strong id="midiStatus">OFF</strong></div>
           <div>CLOCK <strong><span id="midiBpm">--</span> BPM</strong></div>
           <div>PHASE <strong id="midiPhase">--</strong></div>
         </div>
-        <div class="midi-note">F8 = clock · FA = establish ONE · FC = master stop indication. PLAY remains local.</div>
+        <div class="midi-note">Nmidi MASTER follows PFD PLAY/STOP. FOLLOW keeps PFD's local PLAY button independent. Web MIDI and Nmidi FOLLOW/MASTER are mutually exclusive.</div>
       </div>
 
       <div class="master-controls" aria-label="Master timing controls">
@@ -182,6 +198,6 @@
     </section>
   </main>
 
-  <script src="program.js?v=2.4"></script>
+  <script src="program.js?v=2.5"></script>
 </body>
 </html>

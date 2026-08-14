@@ -32,6 +32,11 @@ const midiInput = document.getElementById('midiInput');
 const midiStatus = document.getElementById('midiStatus');
 const midiBpm = document.getElementById('midiBpm');
 const midiPhase = document.getElementById('midiPhase');
+const nmidiMode = document.getElementById('nmidiMode');
+const nmidiStatus = document.getElementById('nmidiStatus');
+const nmidiBpm = document.getElementById('nmidiBpm');
+const nmidiSource = document.getElementById('nmidiSource');
+const nmidiPacket = document.getElementById('nmidiPacket');
 const autoFillButtons = [...document.querySelectorAll('.autofill-button')];
 
 const tracks = [];
@@ -53,6 +58,21 @@ let midiLastPulseTime = 0;
 let midiIntervals = [];
 let midiClockSeenAt = 0;
 let midiHasStartReference = false;
+
+// NMIDI v3 distributed clock state.
+const NMIDI_CHANNEL_NAME = 'monke-nmidi-v3';
+const nmidiChannel = ('BroadcastChannel' in window)
+  ? new BroadcastChannel(NMIDI_CHANNEL_NAME)
+  : null;
+
+let nmidiRole = 'off';       // off | master | follow
+let nmidiMasterRunning = false;
+let nmidiPhaseOriginMs = null;
+let nmidiBpmValue = Number(tempo.value);
+let nmidiLastPacketAt = 0;
+let nmidiLastAppliedBpm = null;
+let nmidiLastAppliedOrigin = null;
+let nmidiHeartbeatTimer = null;
 
 // Two short snare fills. A button press queues the selected fill for the next 1/4-note boundary.
 // Each fill occupies eight 1/16-note steps, then normal fractal playback simply continues.
@@ -221,10 +241,26 @@ function setTempo(bpm) {
   const t = (clamped - min) / (max - min);
   const degrees = 135 + t * 270;
   knobIndicator.style.transform = `rotate(${degrees}deg)`;
+
+  if (nmidiRole === 'master') {
+    nmidiBpmValue = clamped;
+    if (nmidiMasterRunning && nmidiPhaseOriginMs != null) {
+      // Preserve current musical phase while changing tempo.
+      const now = nmidiGlobalNowMs();
+      const oldBpm = Number(setTempo._lastMasterBpm || clamped);
+      const oldStepMs = (60000 / oldBpm) / 4;
+      const elapsedSteps = (now - nmidiPhaseOriginMs) / oldStepMs;
+      const newStepMs = (60000 / clamped) / 4;
+      nmidiPhaseOriginMs = now - elapsedSteps * newStepMs;
+    }
+    setTempo._lastMasterBpm = clamped;
+    sendNmidiState('tempo');
+  }
 }
 
 function stepSeconds() {
-  return (60 / Number(tempo.value)) / 4;
+  const bpm = nmidiRole === 'follow' ? nmidiBpmValue : Number(tempo.value);
+  return (60 / bpm) / 4;
 }
 
 function makeRandomPath() {
@@ -510,7 +546,9 @@ function scheduleStep(time) {
 }
 
 function scheduler() {
-  if (midiExternal) return;
+  if (midiExternal || nmidiRole === 'follow') return;
+  if (nmidiRole === 'follow' && !nmidiMasterRunning) return;
+
   while (nextStepTime < audioCtx.currentTime + scheduleAheadSec) {
     scheduleStep(nextStepTime);
     const base = stepSeconds();
@@ -531,7 +569,6 @@ async function startSequencer() {
 
   if (midiExternal) {
     // The MIDI phase has kept running silently while PFD was stopped.
-    // Join at the current 16th-note position instead of inventing a new ONE.
     stepIndex = midiStepCounter % LEVELS;
     tracks.forEach(track => {
       track.path = null;
@@ -541,6 +578,18 @@ async function startSequencer() {
     });
     if (schedulerTimer) window.clearInterval(schedulerTimer);
     schedulerTimer = null;
+
+  } else if (nmidiRole === 'follow') {
+    if (nmidiMasterRunning && nmidiPhaseOriginMs != null) {
+      alignPfdToNmidiPhase();
+      scheduler();
+      schedulerTimer = window.setInterval(scheduler, lookAheadMs);
+    } else {
+      if (schedulerTimer) window.clearInterval(schedulerTimer);
+      schedulerTimer = null;
+      nmidiStatus.textContent = 'WAITING';
+    }
+
   } else {
     stepIndex = 0;
     fillStepCounter = 0;
@@ -548,6 +597,17 @@ async function startSequencer() {
     updateAutoFillLights();
     tracks.forEach(track => { track.path = null; track.localStep = 0; });
     nextStepTime = audioCtx.currentTime + 0.06;
+
+    if (nmidiRole === 'master') {
+      nmidiMasterRunning = true;
+      nmidiBpmValue = Number(tempo.value);
+      nmidiPhaseOriginMs = nmidiGlobalNowMs() + 60;
+      nmidiLastAppliedBpm = nmidiBpmValue;
+      nmidiLastAppliedOrigin = nmidiPhaseOriginMs;
+      sendNmidiState('start');
+      startNmidiHeartbeat();
+    }
+
     scheduler();
     schedulerTimer = window.setInterval(scheduler, lookAheadMs);
   }
@@ -555,6 +615,12 @@ async function startSequencer() {
 
 function stopSequencer() {
   isPlaying = false;
+
+  if (nmidiRole === 'master' && nmidiMasterRunning) {
+    nmidiMasterRunning = false;
+    stopNmidiHeartbeat();
+    sendNmidiState('stop');
+  }
   transport.setAttribute('aria-pressed', 'false');
   transport.textContent = 'PLAY';
   if (schedulerTimer) window.clearInterval(schedulerTimer);
@@ -747,7 +813,7 @@ transport.addEventListener('click', () => {
 
 tempoKnob.addEventListener('wheel', event => {
   event.preventDefault();
-  if (midiExternal) return;
+  if (midiExternal || nmidiRole === 'follow') return;
   setTempo(Number(tempo.value) + (event.deltaY < 0 ? 1 : -1));
 }, { passive: false });
 
@@ -772,7 +838,237 @@ tempoKnob.addEventListener('pointermove', event => {
 
 tempoKnob.addEventListener('pointerup', () => { dragging = false; });
 tempoKnob.addEventListener('pointercancel', () => { dragging = false; });
-tempoKnob.addEventListener('dblclick', () => { if (!midiExternal) setTempo(90); });
+tempoKnob.addEventListener('dblclick', () => { if (!midiExternal && nmidiRole !== 'follow') setTempo(90); });
+
+
+/* ---------- NMIDI v3 DISTRIBUTED CLOCK ----------
+   MASTER broadcasts BPM + running state + shared phase origin.
+   FOLLOW schedules locally from that state; routine heartbeat packets do not
+   restart the scheduler.
+*/
+function nmidiGlobalNowMs() {
+  return performance.timeOrigin + performance.now();
+}
+
+function sendNmidiState(reason) {
+  if (!nmidiChannel || nmidiRole !== 'master') return;
+
+  nmidiPacket.textContent = String(reason).toUpperCase();
+  nmidiStatus.textContent = nmidiMasterRunning ? 'MASTER RUN' : 'MASTER STOP';
+  nmidiBpm.textContent = String(Math.round(Number(tempo.value)));
+  nmidiSource.textContent = 'PFD';
+
+  nmidiChannel.postMessage({
+    protocol: 'NMIDI',
+    version: 3,
+    type: 'state',
+    source: 'PFD',
+    bpm: Number(tempo.value),
+    running: nmidiMasterRunning,
+    phaseOriginMs: nmidiPhaseOriginMs,
+    sentAtMs: nmidiGlobalNowMs(),
+    reason
+  });
+}
+
+function startNmidiHeartbeat() {
+  stopNmidiHeartbeat();
+  nmidiHeartbeatTimer = window.setInterval(() => sendNmidiState('heartbeat'), 2000);
+}
+
+function stopNmidiHeartbeat() {
+  if (nmidiHeartbeatTimer) window.clearInterval(nmidiHeartbeatTimer);
+  nmidiHeartbeatTimer = null;
+}
+
+function updateNmidiFollowTempo(bpm) {
+  if (!Number.isFinite(bpm)) return;
+  nmidiBpmValue = bpm;
+  setTempo(bpm);
+  nmidiBpm.textContent = String(Math.round(bpm));
+}
+
+function alignPfdToNmidiPhase() {
+  if (!audioCtx || nmidiPhaseOriginMs == null || !Number.isFinite(nmidiBpmValue)) return;
+
+  const stepMs = (60000 / nmidiBpmValue) / 4;
+  const elapsedStepsExact = (nmidiGlobalNowMs() - nmidiPhaseOriginMs) / stepMs;
+  const wholeSteps = Math.floor(elapsedStepsExact);
+  const frac = elapsedStepsExact - wholeSteps;
+
+  stepIndex = ((wholeSteps % LEVELS) + LEVELS) % LEVELS;
+  fillStepCounter = Math.max(0, wholeSteps);
+
+  tracks.forEach(track => {
+    track.path = null;
+    track.localStep = track.halfTime
+      ? ((Math.floor(wholeSteps / 2) % LEVELS) + LEVELS) % LEVELS
+      : stepIndex;
+  });
+
+  const untilNextStepSec = Math.max(0.006, (1 - frac) * stepSeconds());
+  nextStepTime = audioCtx.currentTime + untilNextStepSec;
+}
+
+function startNmidiFollowScheduler() {
+  if (!isPlaying || !audioCtx || nmidiRole !== 'follow' || !nmidiMasterRunning) return;
+  alignPfdToNmidiPhase();
+
+  if (schedulerTimer) window.clearInterval(schedulerTimer);
+  scheduler();
+  schedulerTimer = window.setInterval(scheduler, lookAheadMs);
+}
+
+nmidiMode.addEventListener('change', () => {
+  nmidiRole = nmidiMode.value;
+
+  stopNmidiHeartbeat();
+
+  if (nmidiRole !== 'off' && midiExternal) {
+    if (midiPort) midiPort.onmidimessage = null;
+    midiPort = null;
+    midiExternal = false;
+    midiInput.value = '';
+    midiStatus.textContent = 'READY';
+    midiBpm.textContent = '--';
+    midiPhase.textContent = '--';
+  }
+
+  if (nmidiRole === 'off') {
+    nmidiStatus.textContent = 'OFF';
+    nmidiBpm.textContent = '--';
+    nmidiSource.textContent = '--';
+    nmidiPacket.textContent = '--';
+    nmidiMasterRunning = false;
+
+    if (isPlaying) {
+      stepIndex = 0;
+      fillStepCounter = 0;
+      tracks.forEach(track => { track.path = null; track.localStep = 0; });
+      nextStepTime = audioCtx.currentTime + 0.05;
+      if (schedulerTimer) window.clearInterval(schedulerTimer);
+      scheduler();
+      schedulerTimer = window.setInterval(scheduler, lookAheadMs);
+    }
+    return;
+  }
+
+  if (!nmidiChannel) {
+    nmidiStatus.textContent = 'UNAVAILABLE';
+    nmidiMode.value = 'off';
+    nmidiRole = 'off';
+    return;
+  }
+
+  if (nmidiRole === 'master') {
+    nmidiBpmValue = Number(tempo.value);
+    nmidiSource.textContent = 'PFD';
+    nmidiBpm.textContent = String(Math.round(nmidiBpmValue));
+
+    if (isPlaying) {
+      nmidiMasterRunning = true;
+      nmidiPhaseOriginMs = nmidiGlobalNowMs() + 60;
+      sendNmidiState('start');
+      startNmidiHeartbeat();
+    } else {
+      nmidiMasterRunning = false;
+      nmidiPhaseOriginMs = null;
+      sendNmidiState('mode');
+    }
+    nmidiStatus.textContent = nmidiMasterRunning ? 'MASTER RUN' : 'MASTER STOP';
+    return;
+  }
+
+  if (nmidiRole === 'follow') {
+    nmidiStatus.textContent = nmidiLastPacketAt ? (nmidiMasterRunning ? 'FOLLOWING' : 'MASTER STOP') : 'WAITING';
+
+    if (schedulerTimer) window.clearInterval(schedulerTimer);
+    schedulerTimer = null;
+
+    if (isPlaying && nmidiMasterRunning) startNmidiFollowScheduler();
+  }
+});
+
+if (nmidiChannel) {
+  nmidiChannel.onmessage = event => {
+    const m = event.data;
+    if (!m || m.protocol !== 'NMIDI' || m.version !== 3 || m.type !== 'state') return;
+    if (m.source === 'PFD' && nmidiRole === 'master') return;
+
+    nmidiLastPacketAt = performance.now();
+    nmidiPacket.textContent = String(m.reason || 'state').toUpperCase();
+
+    const incomingBpm = Number.isFinite(m.bpm) ? m.bpm : nmidiBpmValue;
+    const incomingOrigin = Number.isFinite(m.phaseOriginMs) ? m.phaseOriginMs : nmidiPhaseOriginMs;
+    const wasRunning = nmidiMasterRunning;
+
+    if (m.source) nmidiSource.textContent = m.source;
+
+    const bpmChanged = Number.isFinite(incomingBpm) &&
+      (nmidiLastAppliedBpm == null || Math.abs(incomingBpm - nmidiLastAppliedBpm) >= 0.5);
+
+    const originChanged = Number.isFinite(incomingOrigin) &&
+      (nmidiLastAppliedOrigin == null || Math.abs(incomingOrigin - nmidiLastAppliedOrigin) > 5);
+
+    nmidiMasterRunning = !!m.running;
+
+    if (Number.isFinite(incomingBpm)) {
+      nmidiBpmValue = incomingBpm;
+      if (nmidiRole === 'follow') {
+        // setTempo would broadcast only in MASTER, so safe here.
+        setTempo(incomingBpm);
+        nmidiBpm.textContent = String(Math.round(incomingBpm));
+      }
+    }
+    if (Number.isFinite(incomingOrigin)) nmidiPhaseOriginMs = incomingOrigin;
+
+    if (nmidiRole !== 'follow') {
+      nmidiLastAppliedBpm = incomingBpm;
+      nmidiLastAppliedOrigin = incomingOrigin;
+      return;
+    }
+
+    if (!nmidiMasterRunning) {
+      nmidiStatus.textContent = 'MASTER STOP';
+      if (schedulerTimer) window.clearInterval(schedulerTimer);
+      schedulerTimer = null;
+
+      nmidiLastAppliedBpm = incomingBpm;
+      nmidiLastAppliedOrigin = incomingOrigin;
+      return;
+    }
+
+    nmidiStatus.textContent = 'FOLLOWING';
+
+    const needsHardAlign =
+      m.reason === 'start' ||
+      (!wasRunning && nmidiMasterRunning) ||
+      bpmChanged ||
+      (originChanged && m.reason !== 'heartbeat');
+
+    if (isPlaying && audioCtx) {
+      if (needsHardAlign) startNmidiFollowScheduler();
+      else if (!schedulerTimer) {
+        scheduler();
+        schedulerTimer = window.setInterval(scheduler, lookAheadMs);
+      }
+    }
+
+    nmidiLastAppliedBpm = incomingBpm;
+    nmidiLastAppliedOrigin = incomingOrigin;
+  };
+} else {
+  nmidiMode.disabled = true;
+  nmidiStatus.textContent = 'UNAVAILABLE';
+}
+
+window.setInterval(() => {
+  if (nmidiRole === 'follow' && nmidiLastPacketAt) {
+    const age = performance.now() - nmidiLastPacketAt;
+    if (age > 5000) nmidiStatus.textContent = 'STALE';
+    else if (nmidiMasterRunning) nmidiStatus.textContent = 'FOLLOWING';
+  }
+}, 250);
 
 /* ---------- WEB MIDI CLOCK IN ----------
    F8 = timing clock, 24 pulses per quarter note.
@@ -823,6 +1119,16 @@ midiInput.addEventListener('change', async () => {
   if (midiPort) midiPort.onmidimessage = null;
   midiPort = null;
   midiExternal = !!midiInput.value;
+
+  if (midiExternal && nmidiRole !== 'off') {
+    stopNmidiHeartbeat();
+    nmidiRole = 'off';
+    nmidiMode.value = 'off';
+    nmidiStatus.textContent = 'OFF';
+    nmidiBpm.textContent = '--';
+    nmidiSource.textContent = '--';
+    nmidiPacket.textContent = '--';
+  }
 
   midiLastPulseTime = 0;
   midiIntervals = [];
