@@ -29,3 +29,25 @@ V0.11
 - LFO moved to its own upper-right modulation bay.
 - Added SINE / SQUARE LFO waveform selection.
 - LFO routing remains per track; no route buttons = no audible modulation.
+
+
+PFD V2.3 MIDI CLOCK + FA PHASE
+- Added Web MIDI clock input and MIDI status panel.
+- Incoming F8 drives the actual PFD engine: 6 F8 pulses = one PFD 1/16-note step.
+- Incoming BPM updates the existing tempo knob/readout.
+- Incoming FA resets the hidden musical phase to ONE but does not force PFD to play.
+- Incoming FC is shown as MASTER STOP; local PFD PLAY/STOP remains independent.
+- MIDI phase keeps counting while PFD is locally stopped.
+- Local PLAY joins the current external phase instead of resetting its own beat position.
+- F8-only sources still work; phase is prefixed with ~ because absolute ONE is unknown.
+- Selecting NO MIDI INPUT returns to the original internal Web Audio scheduler.
+
+
+PFD V2.4 AUTOFILL
+- Added two small AUTOFILL buttons beside PLAY.
+- Fill 1: eight 1/16-note snare hits with a velocity crescendo.
+- Fill 2: eight-step figure: hit-hit-rest-rest-hit-hit-hit-hit.
+- Fills use the currently selected snare sample and the snare channel's tune/filter/volume/pan/reverb.
+- Pressing a fill queues it for the next quarter-note boundary; the button stays lit while queued/playing.
+- Each fill lasts eight 1/16-note steps, then the normal fractal pattern continues automatically.
+- MIDI clock mode follows the external 1/16-note phase, including FA reset to ONE.

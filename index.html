@@ -3,13 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PFD - Probabilistic Fractal Drums V2.0</title>
+  <title>PFD - Probabilistic Fractal Drums V2.4 AUTOFILL</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="machine-shell">
     <section class="machine" aria-label="Fractal drum prototype">
-      <div class="brand">PFD - Probabilistic Fractal Drums</div>
+      <div class="brand">PFD - ProbabilISTIC FRACTAL DRUMS</div>
+      <button id="midiButton" class="midi-button" type="button">MIDI</button>
+      <div id="midiPanel" class="midi-panel">
+        <div class="midi-title">MIDI CLOCK IN</div>
+        <label for="midiInput">INPUT</label>
+        <select id="midiInput">
+          <option value="">NO MIDI INPUT</option>
+        </select>
+        <div class="midi-readout">
+          <div>STATUS <strong id="midiStatus">OFF</strong></div>
+          <div>CLOCK <strong><span id="midiBpm">--</span> BPM</strong></div>
+          <div>PHASE <strong id="midiPhase">--</strong></div>
+        </div>
+        <div class="midi-note">F8 = clock · FA = establish ONE · FC = master stop indication. PLAY remains local.</div>
+      </div>
 
       <div class="master-controls" aria-label="Master timing controls">
         <div class="tempo-block">
@@ -154,11 +168,20 @@
             <button class="mute-button" data-track="3" type="button" aria-pressed="false">4</button>
           </div>
         </div>
-        <button id="transport" class="transport-button" type="button" aria-pressed="false">PLAY</button>
+        <div class="transport-row">
+          <div class="autofill-block" aria-label="Automatic snare fills">
+            <div class="autofill-title">AUTOFILL</div>
+            <div class="autofill-buttons">
+              <button class="autofill-button" type="button" aria-pressed="false">1</button>
+              <button class="autofill-button" type="button" aria-pressed="false">2</button>
+            </div>
+          </div>
+          <button id="transport" class="transport-button" type="button" aria-pressed="false">PLAY</button>
+        </div>
       </div>
     </section>
   </main>
 
-  <script src="program.js"V2.0></script>
+  <script src="program.js?v=2.4"></script>
 </body>
 </html>
