@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PFD - Probabilistic Fractal Drums V2.0</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="machine-shell">
+    <section class="machine" aria-label="Fractal drum prototype">
+      <div class="brand">PFD - Probabilistic Fractal Drums</div>
+
+      <div class="master-controls" aria-label="Master timing controls">
+        <div class="tempo-block">
+          <div class="knob" id="tempoKnob" role="slider" aria-label="Tempo" aria-valuemin="20" aria-valuemax="240" aria-valuenow="90">
+            <span></span>
+          </div>
+          <label for="tempo">TEMPO</label>
+          <input id="tempo" type="range" min="20" max="240" value="90" tabindex="-1" />
+          <output id="tempoValue">90 BPM</output>
+        </div>
+
+        <div class="swing-block">
+          <label for="swing">SWING</label>
+          <input id="swing" type="range" min="50" max="75" value="50" />
+          <output id="swingValue">50%</output>
+        </div>
+      </div>
+
+      <div class="lfo-block" aria-label="Global tune LFO">
+        <div class="lfo-title">LFO</div>
+        <div class="lfo-knobs">
+          <label>
+            <span>RATE</span>
+            <div class="mini-knob" id="lfoRateKnob" role="slider" aria-label="LFO rate"><span></span></div>
+            <input id="lfoRate" type="range" min="0" max="100" value="42" tabindex="-1" />
+            <output id="lfoRateValue">0.31 Hz</output>
+          </label>
+          <label>
+            <span>DEPTH</span>
+            <div class="mini-knob" id="lfoDepthKnob" role="slider" aria-label="LFO tune depth"><span></span></div>
+            <input id="lfoDepth" type="range" min="0" max="24" value="0" tabindex="-1" />
+            <output id="lfoDepthValue">0 st</output>
+          </label>
+        </div>
+        <div class="lfo-wave-label">WAVE</div>
+        <div class="lfo-wave-row">
+          <button class="lfo-wave-button active" data-wave="sine" type="button" aria-pressed="true">SINE</button>
+          <button class="lfo-wave-button" data-wave="square" type="button" aria-pressed="false">SQUARE</button>
+        </div>
+        <div class="lfo-route-label">TUNE ROUTE</div>
+        <div class="lfo-route-row">
+          <button class="lfo-route-button" type="button" aria-pressed="false">1</button>
+          <button class="lfo-route-button" type="button" aria-pressed="false">2</button>
+          <button class="lfo-route-button" type="button" aria-pressed="false">3</button>
+          <button class="lfo-route-button" type="button" aria-pressed="false">4</button>
+        </div>
+      </div>
+
+
+      <button id="midiButton" class="midi-button" type="button" aria-haspopup="dialog" aria-expanded="false">MIDI</button>
+
+      <div id="midiOverlay" class="midi-overlay" hidden>
+        <div class="midi-panel" role="dialog" aria-modal="true" aria-labelledby="midiTitle">
+          <button id="midiClose" class="midi-close" type="button" aria-label="Close MIDI settings">×</button>
+          <div id="midiTitle" class="midi-title">MIDI CLOCK</div>
+          <label class="midi-field">
+            <span>INPUT</span>
+            <select id="midiInput"><option value="">No MIDI input</option></select>
+          </label>
+          <div class="midi-status-row"><span>STATUS</span><output id="midiStatus">OFF</output></div>
+          <div class="midi-status-row"><span>CLOCK</span><output id="midiBpm">-- BPM</output></div>
+          <div class="midi-note">TEST MODE: clock detection only. PFD still runs on its internal clock.</div>
+        </div>
+      </div>
+
+      <div id="trees"></div>
+
+      <div class="track-row" id="trackRow">
+        <button class="track-button" data-track="0" type="button" aria-pressed="false">1</button>
+        <button class="track-button" data-track="1" type="button" aria-pressed="false">2</button>
+        <button class="track-button" data-track="2" type="button" aria-pressed="false">3</button>
+        <button class="track-button" data-track="3" type="button" aria-pressed="false">4</button>
+      </div>
+
+      <div class="utility-column">
+        <div class="mixer" aria-label="Four channel mixer">
+          <div class="mixer-row-label">MIXER</div>
+          <div class="channels">
+            <div class="channel" data-track="0">
+              <div class="channel-num">1</div>
+              <div class="sample-bank" aria-label="Track 1 sample selector">
+                <div class="sample-label">KICKS</div>
+                <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
+                <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
+                <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
+                <button class="sample-button" data-sample="3" type="button" aria-pressed="false">4</button>
+                <button class="sample-button" data-sample="4" type="button" aria-pressed="false">5</button>
+              </div>
+              <label class="filter-label">FILTER<div class="filter-knob" role="slider" aria-label="Track 1 low pass filter" aria-valuemin="200" aria-valuemax="20000" aria-valuenow="20000"><span></span></div><input class="filter" type="range" min="0" max="100" value="100" tabindex="-1"></label>
+              <div class="fader-grid">
+                <label class="tune-label">TUNE<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label>
+                <label class="volume-label">VOL<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label>
+                <label class="pan-label">PAN<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label>
+                <label class="reverb-label">REV<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label>
+              </div>
+            </div>
+            <div class="channel" data-track="1">
+              <div class="channel-num">2</div>
+              <div class="sample-bank" aria-label="Track 2 sample selector">
+                <div class="sample-label">SNARES</div>
+                <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
+                <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
+                <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
+                <button class="sample-button" data-sample="3" type="button" aria-pressed="false">4</button>
+                <button class="sample-button" data-sample="4" type="button" aria-pressed="false">5</button>
+              </div>
+              <label class="filter-label">FILTER<div class="filter-knob" role="slider" aria-label="Track 2 low pass filter" aria-valuemin="200" aria-valuemax="20000" aria-valuenow="20000"><span></span></div><input class="filter" type="range" min="0" max="100" value="100" tabindex="-1"></label>
+              <div class="fader-grid">
+                <label class="tune-label">TUNE<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label>
+                <label class="volume-label">VOL<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label>
+                <label class="pan-label">PAN<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label>
+                <label class="reverb-label">REV<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label>
+              </div>
+            </div>
+            <div class="channel" data-track="2">
+              <div class="channel-num">3</div>
+              <div class="sample-bank" aria-label="Track 3 sample selector">
+                <div class="sample-label">HIGH-HATS</div>
+                <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
+                <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
+                <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
+                <button class="sample-button" data-sample="3" type="button" aria-pressed="false">4</button>
+                <button class="sample-button" data-sample="4" type="button" aria-pressed="false">5</button>
+              </div>
+              <label class="filter-label">FILTER<div class="filter-knob" role="slider" aria-label="Track 3 low pass filter" aria-valuemin="200" aria-valuemax="20000" aria-valuenow="20000"><span></span></div><input class="filter" type="range" min="0" max="100" value="100" tabindex="-1"></label>
+              <div class="fader-grid">
+                <label class="tune-label">TUNE<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label>
+                <label class="volume-label">VOL<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label>
+                <label class="pan-label">PAN<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label>
+                <label class="reverb-label">REV<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label>
+              </div>
+            </div>
+            <div class="channel" data-track="3">
+              <div class="channel-num">4</div>
+              <div class="sample-bank" aria-label="Track 4 sample selector">
+                <div class="sample-label">PERC</div>
+                <button class="sample-button selected" data-sample="0" type="button" aria-pressed="true">1</button>
+                <button class="sample-button" data-sample="1" type="button" aria-pressed="false">2</button>
+                <button class="sample-button" data-sample="2" type="button" aria-pressed="false">3</button>
+                <button class="sample-button" data-sample="3" type="button" aria-pressed="false">4</button>
+                <button class="sample-button" data-sample="4" type="button" aria-pressed="false">?</button>
+              </div>
+              <label class="filter-label">FILTER<div class="filter-knob" role="slider" aria-label="Track 4 low pass filter" aria-valuemin="200" aria-valuemax="20000" aria-valuenow="20000"><span></span></div><input class="filter" type="range" min="0" max="100" value="100" tabindex="-1"></label>
+              <div class="fader-grid">
+                <label class="tune-label">TUNE<input class="mix-slider tune" type="range" min="-24" max="24" value="0" orient="vertical"></label>
+                <label class="volume-label">VOL<input class="mix-slider volume" type="range" min="0" max="120" value="100" orient="vertical"></label>
+                <label class="pan-label">PAN<input class="mix-slider pan" type="range" min="-100" max="100" value="0" orient="vertical"></label>
+                <label class="reverb-label">REV<input class="mix-slider reverb" type="range" min="0" max="100" value="8" orient="vertical"></label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mute-block">
+          <div class="utility-label">MUTE</div>
+          <div class="mute-row">
+            <button class="mute-button" data-track="0" type="button" aria-pressed="false">1</button>
+            <button class="mute-button" data-track="1" type="button" aria-pressed="false">2</button>
+            <button class="mute-button" data-track="2" type="button" aria-pressed="false">3</button>
+            <button class="mute-button" data-track="3" type="button" aria-pressed="false">4</button>
+          </div>
+        </div>
+        <button id="transport" class="transport-button" type="button" aria-pressed="false">PLAY</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="program.js"></script>
+</body>
+</html>

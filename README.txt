@@ -51,3 +51,4 @@ PFD V2.4 AUTOFILL
 - Pressing a fill queues it for the next quarter-note boundary; the button stays lit while queued/playing.
 - Each fill lasts eight 1/16-note steps, then the normal fractal pattern continues automatically.
 - MIDI clock mode follows the external 1/16-note phase, including FA reset to ONE.
+

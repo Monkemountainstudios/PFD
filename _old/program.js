@@ -27,12 +27,11 @@ const lfoWaveButtons = [...document.querySelectorAll('.lfo-wave-button')];
 const channels = [...document.querySelectorAll('.channel')];
 const knobIndicator = document.querySelector('#tempoKnob span');
 const midiButton = document.getElementById('midiButton');
-const midiPanel = document.getElementById('midiPanel');
-const midiInput = document.getElementById('midiInput');
+const midiOverlay = document.getElementById('midiOverlay');
+const midiClose = document.getElementById('midiClose');
+const midiInputSelect = document.getElementById('midiInput');
 const midiStatus = document.getElementById('midiStatus');
 const midiBpm = document.getElementById('midiBpm');
-const midiPhase = document.getElementById('midiPhase');
-const autoFillButtons = [...document.querySelectorAll('.autofill-button')];
 
 const tracks = [];
 let audioCtx = null;
@@ -43,26 +42,6 @@ let stepIndex = 0;
 const lookAheadMs = 25;
 const scheduleAheadSec = 0.10;
 
-// MIDI clock state. Phase runs even while the drum engine is locally stopped.
-let midiAccess = null;
-let midiPort = null;
-let midiExternal = false;
-let midiPulseCounter = 0;   // 24 PPQN, 96 pulses per 4/4 bar
-let midiStepCounter = 0;    // 16th-note counter (one step every 6 F8)
-let midiLastPulseTime = 0;
-let midiIntervals = [];
-let midiClockSeenAt = 0;
-let midiHasStartReference = false;
-
-// Two short snare fills. A button press queues the selected fill for the next 1/4-note boundary.
-// Each fill occupies eight 1/16-note steps, then normal fractal playback simply continues.
-let fillStepCounter = 0;
-let queuedFill = null;
-let activeFill = null;
-const AUTO_FILLS = [
-  { hits:[1,1,1,1,1,1,1,1], velocities:[0.24,0.31,0.39,0.48,0.58,0.70,0.84,1.00] },
-  { hits:[1,1,0,0,1,1,1,1], velocities:[0.78,0.82,0,0,0.90,0.94,0.97,1.00] }
-];
 function nodePosition(level, index) {
   const count = 2 ** level;
   const sidePadding = level === LEVELS - 1 ? 7 : 18;
@@ -223,6 +202,17 @@ function setTempo(bpm) {
   knobIndicator.style.transform = `rotate(${degrees}deg)`;
 }
 
+function setTempoVisualOnly(bpm) {
+  const min = Number(tempo.min);
+  const max = Number(tempo.max);
+  const clamped = Math.max(min, Math.min(max, Math.round(bpm)));
+  tempoValue.value = `${clamped} BPM`;
+  tempoKnob.setAttribute('aria-valuenow', String(clamped));
+  const t = (clamped - min) / (max - min);
+  const degrees = 135 + t * 270;
+  knobIndicator.style.transform = `rotate(${degrees}deg)`;
+}
+
 function stepSeconds() {
   return (60 / Number(tempo.value)) / 4;
 }
@@ -329,7 +319,7 @@ async function loadAllSamples() {
   ));
 }
 
-function synthFallback(trackIndex, time, velocity = 1) {
+function synthFallback(trackIndex, time) {
   const gain = audioCtx.createGain();
   gain.connect(tracks[trackIndex].filterNode || tracks[trackIndex].gainNode || audioCtx.destination);
 
@@ -338,7 +328,7 @@ function synthFallback(trackIndex, time, velocity = 1) {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(135, time);
     osc.frequency.exponentialRampToValueAtTime(45, time + 0.10);
-    gain.gain.setValueAtTime(0.9 * velocity, time);
+    gain.gain.setValueAtTime(0.9, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
     osc.connect(gain);
     osc.start(time); osc.stop(time + 0.18);
@@ -350,7 +340,7 @@ function synthFallback(trackIndex, time, velocity = 1) {
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     noise.buffer = noiseBuffer;
     osc.type = 'triangle'; osc.frequency.value = 180;
-    gain.gain.setValueAtTime(0.35 * velocity, time);
+    gain.gain.setValueAtTime(0.35, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
     osc.connect(gain); noise.connect(gain);
     osc.start(time); noise.start(time); osc.stop(time + 0.13); noise.stop(time + 0.13);
@@ -361,68 +351,31 @@ function synthFallback(trackIndex, time, velocity = 1) {
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     noise.buffer = noiseBuffer;
     const hp = audioCtx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 5500;
-    gain.gain.setValueAtTime(0.22 * velocity, time);
+    gain.gain.setValueAtTime(0.22, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.045);
     noise.connect(hp).connect(gain); noise.start(time); noise.stop(time + 0.05);
   } else {
     const osc = audioCtx.createOscillator();
     osc.type = 'square'; osc.frequency.setValueAtTime(620, time);
     osc.frequency.exponentialRampToValueAtTime(210, time + 0.07);
-    gain.gain.setValueAtTime(0.16 * velocity, time);
+    gain.gain.setValueAtTime(0.16, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.09);
     osc.connect(gain); osc.start(time); osc.stop(time + 0.10);
   }
 }
 
-function triggerTrack(track, time, velocity = 1) {
+function triggerTrack(track, time) {
   if (track.muted) return;
   const buffer = track.buffers[track.selectedSample];
   if (buffer) {
     const source = audioCtx.createBufferSource();
-    const hitGain = audioCtx.createGain();
     source.buffer = buffer;
     source.playbackRate.value = Math.pow(2, track.tune / 12);
-    hitGain.gain.value = Math.max(0.001, velocity);
     if (track.lfoEnabled && track.lfoGain) track.lfoGain.connect(source.detune);
-    source.connect(hitGain);
-    hitGain.connect(track.filterNode || track.gainNode || audioCtx.destination);
+    source.connect(track.filterNode || track.gainNode || audioCtx.destination);
     source.start(time);
   } else {
-    synthFallback(track.index, time, velocity);
-  }
-}
-
-function updateAutoFillLights() {
-  autoFillButtons.forEach((button, i) => {
-    const on = queuedFill === i || (activeFill && activeFill.index === i);
-    button.classList.toggle('active', on);
-    button.setAttribute('aria-pressed', String(on));
-  });
-}
-
-function queueAutoFill(index) {
-  if (!AUTO_FILLS[index]) return;
-  queuedFill = index;
-  updateAutoFillLights();
-}
-
-function scheduleAutoFillStep(time) {
-  // Queue point: next quarter-note boundary (four 16ths). This makes button presses land cleanly
-  // without waiting for an entire bar. FA/PLAY still reset the phase, so machines agree on the grid.
-  if (!activeFill && queuedFill !== null && fillStepCounter % 4 === 0) {
-    activeFill = { index: queuedFill, step: 0 };
-    queuedFill = null;
-    updateAutoFillLights();
-  }
-
-  if (!activeFill) return;
-  const def = AUTO_FILLS[activeFill.index];
-  const i = activeFill.step;
-  if (def.hits[i]) triggerTrack(tracks[1], time, def.velocities[i] ?? 1);
-  activeFill.step++;
-  if (activeFill.step >= def.hits.length) {
-    activeFill = null;
-    updateAutoFillLights();
+    synthFallback(track.index, time);
   }
 }
 
@@ -478,8 +431,6 @@ function scheduleStep(time) {
   // Master quarter-note blink remains tied to the global 4-step cycle.
   if (stepIndex === 0) flashHiddenTrackButtons(time);
 
-  scheduleAutoFillStep(time);
-
   tracks.forEach(track => {
     // Half-time tracks only advance on every other master subdivision.
     if (track.halfTime && (stepIndex % 2 === 1)) return;
@@ -506,11 +457,9 @@ function scheduleStep(time) {
   });
 
   stepIndex = (stepIndex + 1) % LEVELS;
-  fillStepCounter++;
 }
 
 function scheduler() {
-  if (midiExternal) return;
   while (nextStepTime < audioCtx.currentTime + scheduleAheadSec) {
     scheduleStep(nextStepTime);
     const base = stepSeconds();
@@ -528,29 +477,11 @@ async function startSequencer() {
   isPlaying = true;
   transport.setAttribute('aria-pressed', 'true');
   transport.textContent = 'STOP';
-
-  if (midiExternal) {
-    // The MIDI phase has kept running silently while PFD was stopped.
-    // Join at the current 16th-note position instead of inventing a new ONE.
-    stepIndex = midiStepCounter % LEVELS;
-    tracks.forEach(track => {
-      track.path = null;
-      track.localStep = track.halfTime
-        ? Math.floor(midiStepCounter / 2) % LEVELS
-        : midiStepCounter % LEVELS;
-    });
-    if (schedulerTimer) window.clearInterval(schedulerTimer);
-    schedulerTimer = null;
-  } else {
-    stepIndex = 0;
-    fillStepCounter = 0;
-    activeFill = null;
-    updateAutoFillLights();
-    tracks.forEach(track => { track.path = null; track.localStep = 0; });
-    nextStepTime = audioCtx.currentTime + 0.06;
-    scheduler();
-    schedulerTimer = window.setInterval(scheduler, lookAheadMs);
-  }
+  stepIndex = 0;
+  tracks.forEach(track => { track.path = null; track.localStep = 0; });
+  nextStepTime = audioCtx.currentTime + 0.06;
+  scheduler();
+  schedulerTimer = window.setInterval(scheduler, lookAheadMs);
 }
 
 function stopSequencer() {
@@ -559,9 +490,6 @@ function stopSequencer() {
   transport.textContent = 'PLAY';
   if (schedulerTimer) window.clearInterval(schedulerTimer);
   schedulerTimer = null;
-  queuedFill = null;
-  activeFill = null;
-  updateAutoFillLights();
   document.querySelectorAll('.node.playhead').forEach(n => n.classList.remove('playhead'));
   document.querySelectorAll('.track-button.tempo-flash').forEach(b => b.classList.remove('tempo-flash'));
   document.querySelectorAll('.branch-pulse').forEach(line => {
@@ -736,9 +664,153 @@ attachMiniKnob(lfoRateKnob, lfoRate, 42);
 attachMiniKnob(lfoDepthKnob, lfoDepth, 0);
 
 
-autoFillButtons.forEach((button, i) => {
-  button.addEventListener('click', () => queueAutoFill(i));
-});
+// ---- MIDI CLOCK TEST LAYER (display only; does not drive the sequencer yet) ----
+let midiAccess = null;
+let activeMidiInput = null;
+let midiClockTimes = [];
+let midiClockCount = 0;
+let midiLastClockAt = 0;
+let midiClockLostTimer = null;
+let midiPulseTimer = null;
+
+function setMidiStatus(text) {
+  if (midiStatus) midiStatus.value = text;
+}
+
+function restoreInternalTempoVisual() {
+  setTempoVisualOnly(Number(tempo.value));
+}
+
+function clearMidiClockState(showLost = false) {
+  midiClockTimes = [];
+  midiClockCount = 0;
+  midiLastClockAt = 0;
+  if (midiBpm) midiBpm.value = '-- BPM';
+  if (showLost) setMidiStatus(activeMidiInput ? 'NO CLOCK' : 'OFF');
+  restoreInternalTempoVisual();
+}
+
+function flashMidiButton() {
+  if (!midiButton) return;
+  midiButton.classList.add('clock-pulse');
+  if (midiPulseTimer) clearTimeout(midiPulseTimer);
+  midiPulseTimer = setTimeout(() => midiButton.classList.remove('clock-pulse'), 80);
+}
+
+function updateMidiBpm(timestamp) {
+  midiClockTimes.push(timestamp);
+  if (midiClockTimes.length > 25) midiClockTimes.shift();
+  if (midiClockTimes.length < 7) return;
+
+  const elapsed = midiClockTimes[midiClockTimes.length - 1] - midiClockTimes[0];
+  const intervals = midiClockTimes.length - 1;
+  if (elapsed <= 0) return;
+
+  const msPerClock = elapsed / intervals;
+  const bpm = 60000 / (msPerClock * 24);
+  if (!Number.isFinite(bpm) || bpm < 20 || bpm > 300) return;
+
+  const rounded = Math.round(bpm);
+  midiBpm.value = `${rounded} BPM`;
+  setMidiStatus('CLOCK');
+  setTempoVisualOnly(rounded);
+}
+
+function handleMidiMessage(event) {
+  const status = event.data && event.data[0];
+  if (status !== 0xF8) return; // MIDI Timing Clock only
+
+  const now = event.timeStamp || performance.now();
+  midiLastClockAt = now;
+  midiClockCount = (midiClockCount + 1) % 24;
+  updateMidiBpm(now);
+
+  // Blink on quarter notes, not on all 24 clock pulses.
+  if (midiClockCount === 0) flashMidiButton();
+
+  if (midiClockLostTimer) clearTimeout(midiClockLostTimer);
+  midiClockLostTimer = setTimeout(() => {
+    const age = performance.now() - midiLastClockAt;
+    if (age > 650) clearMidiClockState(true);
+  }, 700);
+}
+
+function disconnectMidiInput() {
+  if (activeMidiInput) activeMidiInput.onmidimessage = null;
+  activeMidiInput = null;
+  midiButton?.classList.remove('connected', 'clock-pulse');
+  clearMidiClockState(false);
+}
+
+function connectMidiInput(id) {
+  disconnectMidiInput();
+  if (!midiAccess || !id) { setMidiStatus('OFF'); return; }
+  const input = midiAccess.inputs.get(id);
+  if (!input) { setMidiStatus('MISSING'); return; }
+  activeMidiInput = input;
+  activeMidiInput.onmidimessage = handleMidiMessage;
+  midiButton?.classList.add('connected');
+  setMidiStatus('READY');
+}
+
+function populateMidiInputs() {
+  if (!midiInputSelect || !midiAccess) return;
+  const previous = activeMidiInput?.id || midiInputSelect.value;
+  midiInputSelect.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = 'No MIDI input';
+  midiInputSelect.appendChild(none);
+  for (const input of midiAccess.inputs.values()) {
+    const option = document.createElement('option');
+    option.value = input.id;
+    option.textContent = input.name || input.manufacturer || 'MIDI input';
+    midiInputSelect.appendChild(option);
+  }
+  if ([...midiInputSelect.options].some(o => o.value === previous)) {
+    midiInputSelect.value = previous;
+  }
+}
+
+async function ensureMidiAccess() {
+  if (midiAccess) return true;
+  if (!navigator.requestMIDIAccess) {
+    setMidiStatus('UNAVAILABLE');
+    return false;
+  }
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+    midiAccess.onstatechange = () => {
+      populateMidiInputs();
+      if (activeMidiInput && !midiAccess.inputs.get(activeMidiInput.id)) disconnectMidiInput();
+    };
+    populateMidiInputs();
+    setMidiStatus('READY');
+    return true;
+  } catch (err) {
+    console.warn('MIDI access denied or unavailable', err);
+    setMidiStatus('DENIED');
+    return false;
+  }
+}
+
+async function openMidiOverlay() {
+  midiOverlay.hidden = false;
+  midiButton.setAttribute('aria-expanded', 'true');
+  await ensureMidiAccess();
+}
+
+function closeMidiOverlay() {
+  midiOverlay.hidden = true;
+  midiButton.setAttribute('aria-expanded', 'false');
+}
+
+midiButton?.addEventListener('click', openMidiOverlay);
+midiClose?.addEventListener('click', closeMidiOverlay);
+midiOverlay?.addEventListener('click', event => { if (event.target === midiOverlay) closeMidiOverlay(); });
+window.addEventListener('keydown', event => { if (event.key === 'Escape' && !midiOverlay?.hidden) closeMidiOverlay(); });
+midiInputSelect?.addEventListener('change', () => connectMidiInput(midiInputSelect.value));
+
 
 transport.addEventListener('click', () => {
   if (isPlaying) stopSequencer();
@@ -747,7 +819,6 @@ transport.addEventListener('click', () => {
 
 tempoKnob.addEventListener('wheel', event => {
   event.preventDefault();
-  if (midiExternal) return;
   setTempo(Number(tempo.value) + (event.deltaY < 0 ? 1 : -1));
 }, { passive: false });
 
@@ -755,7 +826,6 @@ let dragging = false;
 let lastY = 0;
 
 tempoKnob.addEventListener('pointerdown', event => {
-  if (midiExternal) return;
   dragging = true;
   lastY = event.clientY;
   tempoKnob.setPointerCapture(event.pointerId);
@@ -772,199 +842,7 @@ tempoKnob.addEventListener('pointermove', event => {
 
 tempoKnob.addEventListener('pointerup', () => { dragging = false; });
 tempoKnob.addEventListener('pointercancel', () => { dragging = false; });
-tempoKnob.addEventListener('dblclick', () => { if (!midiExternal) setTempo(90); });
-
-/* ---------- WEB MIDI CLOCK IN ----------
-   F8 = timing clock, 24 pulses per quarter note.
-   PFD master step = 1/16 note, therefore 6 F8 pulses per step.
-
-   FA = establish musical ONE / reset hidden phase.
-   FC = master-stop indication only; local PFD transport remains independent.
-   The hidden phase continues to count while PFD is locally stopped.
-*/
-midiButton.addEventListener('click', async () => {
-  midiPanel.classList.toggle('open');
-  if (!midiAccess) await initMIDI();
-});
-
-async function initMIDI() {
-  if (!navigator.requestMIDIAccess) {
-    midiStatus.textContent = 'UNAVAILABLE';
-    return;
-  }
-  try {
-    midiStatus.textContent = 'REQUESTING';
-    midiAccess = await navigator.requestMIDIAccess({ sysex:false });
-    midiAccess.onstatechange = populateMidiInputs;
-    populateMidiInputs();
-    midiStatus.textContent = 'READY';
-  } catch (err) {
-    console.warn('MIDI access failed', err);
-    midiStatus.textContent = 'DENIED';
-  }
-}
-
-function populateMidiInputs() {
-  const old = midiInput.value;
-  midiInput.innerHTML = '<option value="">NO MIDI INPUT</option>';
-  if (!midiAccess) return;
-
-  for (const input of midiAccess.inputs.values()) {
-    const option = document.createElement('option');
-    option.value = input.id;
-    option.textContent = input.name || 'MIDI INPUT';
-    midiInput.appendChild(option);
-  }
-
-  if ([...midiInput.options].some(o => o.value === old)) midiInput.value = old;
-}
-
-midiInput.addEventListener('change', async () => {
-  if (midiPort) midiPort.onmidimessage = null;
-  midiPort = null;
-  midiExternal = !!midiInput.value;
-
-  midiLastPulseTime = 0;
-  midiIntervals = [];
-  midiClockSeenAt = 0;
-  midiBpm.textContent = '--';
-
-  if (!midiExternal) {
-    fillStepCounter = 0;
-    activeFill = null;
-    updateAutoFillLights();
-    midiStatus.textContent = 'READY';
-    midiPhase.textContent = '--';
-
-    if (isPlaying) {
-      stepIndex = 0;
-      tracks.forEach(track => { track.path = null; track.localStep = 0; });
-      nextStepTime = audioCtx.currentTime + 0.05;
-      if (schedulerTimer) window.clearInterval(schedulerTimer);
-      scheduler();
-      schedulerTimer = window.setInterval(scheduler, lookAheadMs);
-    }
-    return;
-  }
-
-  midiPort = midiAccess.inputs.get(midiInput.value);
-  if (midiPort) {
-    try { await midiPort.open(); } catch (err) {}
-    midiPort.onmidimessage = handleMidiMessage;
-    midiStatus.textContent = 'WAITING';
-
-    if (schedulerTimer) window.clearInterval(schedulerTimer);
-    schedulerTimer = null;
-  }
-});
-
-function updateMidiTempoDisplay(bpm) {
-  const min = Number(tempo.min);
-  const max = Number(tempo.max);
-  const clamped = Math.max(min, Math.min(max, Math.round(bpm)));
-  setTempo(clamped);
-  midiBpm.textContent = String(clamped);
-}
-
-function updateMidiPhaseDisplay() {
-  const pulseInBar = ((midiPulseCounter % 96) + 96) % 96;
-  const beat = Math.floor(pulseInBar / 24) + 1;
-  const sixteenth = Math.floor((pulseInBar % 24) / 6) + 1;
-  midiPhase.textContent = `${midiHasStartReference ? '' : '~'}${beat}.${sixteenth}`;
-}
-
-function flashMidiQuarter() {
-  midiButton.classList.add('clock-pulse');
-  window.setTimeout(() => midiButton.classList.remove('clock-pulse'), 70);
-}
-
-function resetPfdMusicalPhase() {
-  midiPulseCounter = 0;
-  midiStepCounter = 0;
-  fillStepCounter = 0;
-  activeFill = null;
-  updateAutoFillLights();
-
-  // FA establishes ONE for the engine's phase too, but does not start it.
-  stepIndex = 0;
-  tracks.forEach(track => {
-    track.path = null;
-    track.localStep = 0;
-  });
-}
-
-function handleMidiMessage(event) {
-  if (!event.data || !event.data.length) return;
-  const status = event.data[0];
-
-  if (status === 0xFA) {
-    resetPfdMusicalPhase();
-    midiHasStartReference = true;
-    midiStatus.textContent = 'START / CLOCK';
-    updateMidiPhaseDisplay();
-    return;
-  }
-
-  if (status === 0xFC) {
-    midiStatus.textContent = 'MASTER STOP';
-    return;
-  }
-
-  if (status !== 0xF8) return;
-
-  const now = performance.now();
-  midiClockSeenAt = now;
-
-  // BPM smoothing from recent F8 intervals.
-  if (midiLastPulseTime) {
-    const dt = now - midiLastPulseTime;
-    if (dt > 1 && dt < 1000) {
-      midiIntervals.push(dt);
-      if (midiIntervals.length > 24) midiIntervals.shift();
-
-      if (midiIntervals.length >= 6) {
-        const avg = midiIntervals.reduce((a,b) => a+b, 0) / midiIntervals.length;
-        const bpm = 60000 / (avg * 24);
-        if (Number.isFinite(bpm) && bpm >= 20 && bpm <= 300) {
-          updateMidiTempoDisplay(bpm);
-        }
-      }
-    }
-  }
-  midiLastPulseTime = now;
-  midiStatus.textContent = 'CLOCK';
-
-  // Visual MIDI heartbeat on quarter notes.
-  if (midiPulseCounter % 24 === 0) flashMidiQuarter();
-
-  // Six MIDI clocks = one PFD 16th-note base step.
-  if (midiPulseCounter % 6 === 0) {
-    if (isPlaying) {
-      if (!audioCtx) audioCtx = new AudioContext();
-      const eventTime = audioCtx.currentTime + 0.006;
-
-      // stepIndex/fillStepCounter reflect the external phase BEFORE scheduleStep advances them.
-      stepIndex = midiStepCounter % LEVELS;
-      fillStepCounter = midiStepCounter;
-      scheduleStep(eventTime);
-    }
-
-    // This advances even while locally stopped.
-    midiStepCounter++;
-  }
-
-  midiPulseCounter++;
-  updateMidiPhaseDisplay();
-}
-
-window.setInterval(() => {
-  if (midiExternal && midiClockSeenAt && performance.now() - midiClockSeenAt > 1000) {
-    midiStatus.textContent = 'NO CLOCK';
-    midiBpm.textContent = '--';
-  }
-}, 250);
-
-
+tempoKnob.addEventListener('dblclick', () => setTempo(90));
 window.addEventListener('resize', alignTrees);
 
 alignTrees();
